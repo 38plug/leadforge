@@ -121,18 +121,39 @@ docker compose up --build
 
 Set `AI_PROVIDER_API_KEY` / `BUSINESS_PROVIDER_API_KEY` / `EMAIL_PROVIDER_API_KEY` (and their `*_PROVIDER` name) in `.env` to move off mock providers; see [docs/providers.md](docs/providers.md).
 
-### Option B — Vercel + Railway/Render (managed)
+### Option B — Free managed hosting (Neon + Render + Vercel)
 
-1. **Database & Redis**: provision managed Postgres and Redis (Railway, Render, Neon, Upstash, etc.). Copy the connection strings.
-2. **Backend** (Railway/Render/any host that runs a Dockerfile or a Python buildpack):
-   - Deploy `apps/api` (it has its own `Dockerfile`).
-   - Set env vars: `DATABASE_URL` (`postgresql+psycopg2://...`), `REDIS_URL`, `JWT_SECRET` (long random value — `openssl rand -hex 32`), `ENVIRONMENT=production`, `CORS_ORIGINS=["https://your-frontend-domain"]`, plus any real provider keys.
-   - Run `alembic upgrade head` once (the Dockerfile's `CMD` does this automatically on every boot, which is safe/idempotent).
-   - Optionally deploy `apps/worker` (its own `Dockerfile`) as a second service pointed at the same `DATABASE_URL`/`REDIS_URL` for background jobs.
-3. **Frontend** (Vercel):
-   - Import `apps/web` as the project root.
-   - Set `NEXT_PUBLIC_API_URL` to the deployed backend's URL.
-   - Vercel auto-detects Next.js; no other config needed.
+This runs the whole product at $0 with no credit card on any of the three
+accounts. Each piece is on a free tier that is permanent rather than a trial:
+
+| Piece | Host | Free-tier caveat |
+| --- | --- | --- |
+| Postgres | [Neon](https://neon.com) | 0.5 GB storage, 100 compute-hours/month. Permanent — no card, no clock. |
+| API | [Render](https://render.com) | Spins down after 15 min idle and takes ~1 min to wake; 750 instance-hours/month per workspace. |
+| Frontend | [Vercel](https://vercel.com) | Hobby plan; no spin-down. |
+
+> **Why not Render's own Postgres?** Its free database *expires 30 days after
+> creation* (then a 14-day grace period before deletion). Neon's free tier has
+> no such clock, so the database lives there.
+
+1. **Database (Neon)** — create a project and copy the connection string. It
+   already looks like `postgresql://…?sslmode=require`, which is what the API
+   expects; a `postgres://` string from any other host is normalised
+   automatically (see `Settings._normalise_database_url`).
+2. **API (Render)** — "New → Blueprint", point it at this repo. `render.yaml`
+   defines the service; Render prompts for the `sync: false` values:
+   - `DATABASE_URL` — the Neon string
+   - `JWT_SECRET` and `SECRET_ENCRYPTION_KEY` — see the checklist below
+   - `CORS_ORIGINS` — `["https://your-app.vercel.app"]` (fill in after step 3,
+     then redeploy)
+   - `OSM_CONTACT` — your email, per OpenStreetMap's usage policy
+3. **Frontend (Vercel)** — import the repo with **Root Directory `apps/web`**.
+   Set `NEXT_PUBLIC_API_URL` to the Render URL. Next.js inlines `NEXT_PUBLIC_*`
+   at build time, so changing it later needs a rebuild, not just a restart.
+
+Expect the first search after an idle period to be slow: Render's ~1 min wake
+plus up to 60s for the OpenStreetMap query. Moving the API to Render's paid
+Starter plan removes the spin-down.
 
 ### Pre-deploy checklist
 

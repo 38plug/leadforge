@@ -1,0 +1,45 @@
+# Render Blueprint for the LeadForge API.
+#
+# Free-tier notes, so the behaviour is not a surprise:
+#   - A free web service spins down after 15 minutes without traffic and takes
+#     roughly a minute to wake. The first search after an idle period pays that
+#     on top of the OSM query itself.
+#   - Each workspace gets 750 free instance-hours per calendar month.
+#   - The database is deliberately NOT defined here. Render's own free Postgres
+#     expires 30 days after creation; this deploy uses Neon's free tier instead,
+#     which is permanent. DATABASE_URL is supplied as a secret at setup.
+#
+# The frontend is not defined here either — it deploys to Vercel, whose free
+# tier serves Next.js without the spin-down.
+
+services:
+  - type: web
+    name: leadforge-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt -r requirements-postgres.txt
+    # Migrations run on every boot: alembic upgrade head is idempotent, so this
+    # is safe, and it keeps the schema in step without a separate release step.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        # 3.13+ still lacks prebuilt wheels for some dependencies here.
+        value: "3.12.7"
+      - key: ENVIRONMENT
+        value: production
+      - key: BUSINESS_PROVIDER
+        value: osm
+      # Prompted for at Blueprint creation; never stored in the repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: SECRET_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: OSM_CONTACT
+        sync: false

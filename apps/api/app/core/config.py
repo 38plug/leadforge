@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -75,6 +76,21 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True
 
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalise_database_url(cls, value: str) -> str:
+        """Accept the `postgres://` URLs several hosts hand out.
+
+        Heroku, Render and others print connection strings beginning with
+        `postgres://`, but SQLAlchemy only registers the `postgresql://`
+        scheme and raises on the shorter one. Pasting the string a provider
+        gives you is the obvious thing to do, so it is normalised here rather
+        than left as a deployment-time surprise.
+        """
+        if value.startswith("postgres://"):
+            return "postgresql://" + value[len("postgres://"):]
+        return value
 
 
 @lru_cache
