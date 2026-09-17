@@ -1,0 +1,36 @@
+# Fly.io configuration for the LeadForge API.
+#
+# The app name must be globally unique on Fly; if "leadforge-api" is taken,
+# change it here and in apps/web/fly.toml's NEXT_PUBLIC_API_URL build arg.
+
+app = "leadforge-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENVIRONMENT = "production"
+  BUSINESS_PROVIDER = "osm"
+  # Secrets (JWT_SECRET, SECRET_ENCRYPTION_KEY, DATABASE_URL, CORS_ORIGINS)
+  # are set with `fly secrets set`, never here — this file is committed.
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_start_machines = true
+  # "suspend" resumes in about a second, so an idle machine costs nothing
+  # without making the next search pay a cold boot.
+  auto_stop_machines = "suspend"
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    path = "/api/health"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
