@@ -1,0 +1,2 @@
+-r ../api/requirements.txt
+rq==2.1.0

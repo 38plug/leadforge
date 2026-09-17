@@ -1,0 +1,329 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session, joinedload
+
+from app.core.config import Settings, get_settings
+from app.core.deps import get_current_workspace
+from app.db.session import get_db
+from app.models.campaign import CampaignRecipient
+from app.models.company import Company, Contact, SocialProfile, Website, WebsiteStatus
+from app.models.lead import Lead, LeadActivity, LeadStatus, Note, Task
+from app.models.misc import AIAnalysis
+from app.models.search import SearchHistory
+from app.models.workspace import Workspace
+from app.providers.business import BusinessSearchFilters, get_business_provider
+from app.providers.website import get_website_provider
+from app.schemas.ai import AILeadAnalysis
+from app.schemas.lead import LeadOut, LeadSearchRequest, LeadSearchResult, LeadStatusUpdate
+from app.services.lead_scoring import LeadScoreService, ScoringInput
+
+router = APIRouter(prefix="/api/leads", tags=["leads"])
+
+
+def _lead_query(db: Session, workspace_id: str):
+    return (
+        db.query(Lead)
+        .options(
+            joinedload(Lead.company).joinedload(Company.contacts),
+            joinedload(Lead.company).joinedload(Company.social_profiles),
+            joinedload(Lead.company).joinedload(Company.website),
+        )
+        .filter(Lead.workspace_id == workspace_id)
+    )
+
+
+@router.get("", response_model=list[LeadOut])
+def list_leads(
+    status_filter: LeadStatus | None = None,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    query = _lead_query(db, workspace.id)
+    if status_filter:
+        query = query.filter(Lead.status == status_filter)
+    return query.order_by(Lead.score.desc()).all()
+
+
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+def clear_all_leads(db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
+    """
+    Permanently deletes every lead (and its companies/contacts/socials/
+    website/activity/notes/tasks) in the current workspace — a full reset,
+    e.g. to clear out mock-provider test data before switching to a real
+    business data provider. Scoped to the workspace, so it can never touch
+    another tenant's data.
+    """
+    lead_ids = [row[0] for row in db.query(Lead.id).filter(Lead.workspace_id == workspace.id).all()]
+    company_ids = [row[0] for row in db.query(Company.id).filter(Company.workspace_id == workspace.id).all()]
+
+    if lead_ids:
+        db.query(CampaignRecipient).filter(CampaignRecipient.lead_id.in_(lead_ids)).delete(synchronize_session=False)
+        db.query(AIAnalysis).filter(AIAnalysis.lead_id.in_(lead_ids)).delete(synchronize_session=False)
+        db.query(LeadActivity).filter(LeadActivity.lead_id.in_(lead_ids)).delete(synchronize_session=False)
+        db.query(Note).filter(Note.lead_id.in_(lead_ids)).delete(synchronize_session=False)
+        db.query(Task).filter(Task.lead_id.in_(lead_ids)).delete(synchronize_session=False)
+        db.query(Lead).filter(Lead.workspace_id == workspace.id).delete(synchronize_session=False)
+
+    if company_ids:
+        db.query(Contact).filter(Contact.company_id.in_(company_ids)).delete(synchronize_session=False)
+        db.query(SocialProfile).filter(SocialProfile.company_id.in_(company_ids)).delete(synchronize_session=False)
+        db.query(Website).filter(Website.company_id.in_(company_ids)).delete(synchronize_session=False)
+        db.query(Company).filter(Company.workspace_id == workspace.id).delete(synchronize_session=False)
+
+    db.commit()
+
+
+@router.post("/search", response_model=LeadSearchResult)
+def search_leads(
+    payload: LeadSearchRequest,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+    settings: Settings = Depends(get_settings),
+):
+    """
+    Runs the full discover -> detect website -> score pipeline synchronously
+    for a small result set. At production scale this becomes a background
+    job (see apps/worker) that streams progress back over websockets/polling.
+    """
+    filters = payload.filters
+    business_provider = get_business_provider(settings)
+    website_provider = get_website_provider()
+    scorer = LeadScoreService()
+
+    niche = filters.custom_niche or filters.niche
+    businesses = business_provider.search(
+        BusinessSearchFilters(
+            country=filters.country,
+            city=filters.city,
+            niche=niche,
+            min_rating=filters.min_rating,
+            min_reviews=filters.min_reviews,
+            max_reviews=filters.max_reviews,
+            limit=25,
+        )
+    )
+
+    created_leads: list[Lead] = []
+    for biz in businesses:
+        if filters.require_phone and not biz.phone:
+            continue
+        if filters.require_email and not biz.email:
+            continue
+        if filters.require_instagram and not biz.instagram:
+            continue
+
+        existing = (
+            db.query(Company)
+            .filter(Company.workspace_id == workspace.id, Company.external_ref == biz.external_ref)
+            .first()
+        )
+        company = existing or Company(
+            workspace_id=workspace.id,
+            source="lead_finder",
+            external_ref=biz.external_ref,
+        )
+        if not existing:
+            db.add(company)
+
+        # Refresh the business details on every search, not just the first —
+        # re-running a search over an area is how a user picks up renames,
+        # new phone numbers, and corrected addresses. Fields the provider
+        # doesn't carry (e.g. ratings on OSM) must not wipe existing values.
+        company.name = biz.name
+        company.niche = biz.niche
+        company.country = biz.country or company.country or ""
+        company.city = biz.city or company.city or ""
+        company.address = biz.address or company.address
+        company.maps_url = biz.maps_url or company.maps_url
+        company.hours = biz.hours or company.hours
+        company.description = biz.description or company.description
+        if biz.rating is not None:
+            company.rating = biz.rating
+        if biz.reviews_count is not None:
+            company.reviews_count = biz.reviews_count
+
+        db.flush()
+
+        if not existing:
+            if biz.phone or biz.email:
+                db.add(Contact(company_id=company.id, phone=biz.phone, email=biz.email))
+            if biz.instagram:
+                db.add(
+                    SocialProfile(
+                        company_id=company.id,
+                        platform="instagram",
+                        handle=biz.instagram,
+                        url=f"https://instagram.com/{biz.instagram}",
+                    )
+                )
+        else:
+            # Keep the primary contact in step with the provider without
+            # discarding details a user may have filled in by hand.
+            contact = db.query(Contact).filter(Contact.company_id == company.id).first()
+            if contact is None and (biz.phone or biz.email):
+                db.add(Contact(company_id=company.id, phone=biz.phone, email=biz.email))
+            elif contact is not None:
+                contact.phone = biz.phone or contact.phone
+                contact.email = biz.email or contact.email
+
+        website_check = website_provider.detect_website(biz.website)
+        if filters.website_status and website_check.status != filters.website_status:
+            continue
+
+        # A company has at most one Website row (unique on company_id), so a
+        # repeat search of the same area must refresh the existing record
+        # rather than insert a second one.
+        website_row = (
+            db.query(Website).filter(Website.company_id == company.id).first() if existing else None
+        )
+        if website_row is None:
+            website_row = Website(company_id=company.id)
+            db.add(website_row)
+
+        website_row.website_url = website_check.website_url
+        website_row.domain = website_check.domain
+        website_row.http_status = website_check.http_status
+        website_row.ssl_status = website_check.ssl_status
+        website_row.redirect_url = website_check.redirect_url
+        website_row.title = website_check.title
+        website_row.status = website_check.status
+        website_row.mobile_friendly = website_check.mobile_friendly
+        website_row.load_time_ms = website_check.load_time_ms
+        website_row.last_checked_at = website_check.last_checked_at
+
+        # "Established" is normally inferred from review volume, but free
+        # providers (OpenStreetMap) don't carry ratings/reviews at all — fall
+        # back to other signs of an active, real listing (posted hours,
+        # a contact channel) so those leads aren't unfairly zeroed out on
+        # this factor just because the data source doesn't track reviews.
+        is_established = (
+            (biz.reviews_count or 0) >= 30
+            if biz.reviews_count is not None
+            else bool(biz.hours or biz.phone or biz.email)
+        )
+
+        score_result = scorer.score(
+            ScoringInput(
+                website_status=website_check.status,
+                rating=biz.rating,
+                reviews_count=biz.reviews_count,
+                has_active_social=bool(biz.instagram),
+                is_established=is_established,
+                has_phone=bool(biz.phone),
+                has_email=bool(biz.email),
+            )
+        )
+        if score_result.score < filters.min_score:
+            continue
+
+        # Re-running a search over the same area is normal (refreshing an
+        # area, tweaking filters). It must refresh the existing lead's score
+        # rather than create a duplicate — and it must never overwrite the
+        # pipeline status of a lead the user is already working.
+        lead = (
+            db.query(Lead)
+            .filter(Lead.workspace_id == workspace.id, Lead.company_id == company.id)
+            .first()
+        )
+        if lead is None:
+            lead = Lead(
+                workspace_id=workspace.id,
+                company_id=company.id,
+                status=LeadStatus.NEW,
+                source="lead_finder",
+            )
+            db.add(lead)
+            db.flush()
+            db.add(LeadActivity(lead_id=lead.id, type="system", message="Lead discovered via Lead Finder"))
+
+        lead.score = score_result.score
+        lead.score_breakdown = [{"label": b.label, "points": b.points} for b in score_result.breakdown]
+        lead.score_recommendation = score_result.recommendation
+        lead.priority = score_result.priority
+        created_leads.append(lead)
+
+    db.add(
+        SearchHistory(
+            workspace_id=workspace.id,
+            filters=filters.model_dump(mode="json"),
+            result_count=len(created_leads),
+        )
+    )
+    db.commit()
+
+    for lead in created_leads:
+        db.refresh(lead)
+
+    return LeadSearchResult(total_found=len(created_leads), leads=created_leads)
+
+
+@router.get("/{lead_id}", response_model=LeadOut)
+def get_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
+    lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+    return lead
+
+
+@router.patch("/{lead_id}", response_model=LeadOut)
+def update_lead_status(
+    lead_id: str,
+    payload: LeadStatusUpdate,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+    lead.status = payload.status
+    db.add(LeadActivity(lead_id=lead.id, type="system", message=f"Status changed to {payload.status.value}"))
+    db.commit()
+    db.refresh(lead)
+    return lead
+
+
+@router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
+    lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+    db.delete(lead)
+    db.commit()
+
+
+@router.post("/{lead_id}/analyze", response_model=AILeadAnalysis)
+def analyze_lead(
+    lead_id: str,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+    settings: Settings = Depends(get_settings),
+):
+    from app.models.misc import AIAnalysis
+    from app.providers.ai import LeadContext, get_ai_provider
+    from app.services.ai_service import AIService
+
+    lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+
+    company = lead.company
+    context = LeadContext(
+        company_name=company.name,
+        niche=company.niche,
+        city=company.city,
+        country=company.country,
+        rating=company.rating,
+        reviews_count=company.reviews_count,
+        website_status=(company.website.status.value if company.website else WebsiteStatus.NO_WEBSITE.value),
+        has_instagram=bool(company.social_profiles),
+        has_phone=bool(company.contacts and company.contacts[0].phone),
+        has_email=bool(company.contacts and company.contacts[0].email),
+    )
+
+    service = AIService(get_ai_provider(settings))
+    analysis = service.analyze_lead(context)
+
+    db.add(AIAnalysis(lead_id=lead.id, provider=settings.ai_provider, model=settings.ai_model, result=analysis.model_dump()))
+    db.add(LeadActivity(lead_id=lead.id, type="ai", message="AI analysis completed"))
+    db.commit()
+
+    return analysis

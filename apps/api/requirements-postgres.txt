@@ -1,0 +1,6 @@
+# Optional: install this on top of requirements.txt when connecting to a
+# real Postgres database (DATABASE_URL=postgresql+psycopg2://...).
+# Not required for local development, which defaults to SQLite.
+# Requires PostgreSQL client headers (pg_config) on some platforms; a
+# managed host's build image will normally already provide these.
+psycopg2-binary==2.9.10
