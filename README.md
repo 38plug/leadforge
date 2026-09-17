@@ -137,6 +137,7 @@ Set `AI_PROVIDER_API_KEY` / `BUSINESS_PROVIDER_API_KEY` / `EMAIL_PROVIDER_API_KE
 ### Pre-deploy checklist
 
 - [ ] `JWT_SECRET` is a real random value, not the placeholder
+- [ ] `SECRET_ENCRYPTION_KEY` is set to a real Fernet key (required in production — without it, saving a workspace's email settings fails)
 - [ ] `DATABASE_URL` points at managed Postgres, not SQLite
 - [ ] `CORS_ORIGINS` lists only your real frontend domain(s)
 - [ ] `ENVIRONMENT=production` (disables the dev-only `create_all()` auto-schema and the demo-user auth fallback path becomes irrelevant once real accounts exist)

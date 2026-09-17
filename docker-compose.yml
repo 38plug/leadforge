@@ -37,6 +37,7 @@ services:
       ENVIRONMENT: production
       DEBUG: "false"
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
       CORS_ORIGINS: '["http://localhost:3000"]'
       # Real business data, free and worldwide. ENVIRONMENT=production above
       # refuses BUSINESS_PROVIDER=mock outright, so no deployment can ever
