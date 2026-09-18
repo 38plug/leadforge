@@ -54,16 +54,26 @@ export default function LoginPage() {
           onChange={(event) => setEmail(event.target.value)}
           placeholder="you@studio.com"
         />
-        <AuthField
-          id="password"
-          label="Password"
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="••••••••"
-        />
+        <div>
+          <AuthField
+            id="password"
+            label="Password"
+            type="password"
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="••••••••"
+          />
+          <div className="mt-1.5 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-2xs text-subtle-foreground transition-colors hover:text-primary"
+            >
+              Forgot your password?
+            </Link>
+          </div>
+        </div>
 
         {error && (
           <p

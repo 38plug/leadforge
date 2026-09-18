@@ -26,6 +26,11 @@ class User(Base):
     # through registration or any workspace-scoped endpoint.
     is_superuser: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+    # Whether the address has been confirmed by following an emailed link.
+    # Recorded but not required to sign in: gating login on it would lock
+    # everyone out of an installation whose SMTP is not configured yet.
+    email_verified_at: Mapped[str | None] = mapped_column(String(64))
+
     memberships: Mapped[list["WorkspaceMember"]] = relationship(back_populates="user")
 
 

@@ -18,7 +18,7 @@ export function AuthLayout({
   title: string;
   subtitle: string;
   children: React.ReactNode;
-  footer: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   return (
     <div className="grid min-h-screen grid-cols-1 bg-background lg:grid-cols-[1.05fr_1fr]">
@@ -85,7 +85,9 @@ export function AuthLayout({
 
           <div className="mt-7">{children}</div>
 
-          <div className="mt-7 text-center text-[13px] text-muted-foreground">{footer}</div>
+          {footer && (
+            <div className="mt-7 text-center text-[13px] text-muted-foreground">{footer}</div>
+          )}
         </div>
       </main>
     </div>

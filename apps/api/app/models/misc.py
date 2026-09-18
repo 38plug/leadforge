@@ -99,3 +99,23 @@ class LeadReveal(Base):
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
     # "YYYY-MM": quota is a monthly allowance, so usage is counted per period.
     period: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+
+
+class AuthToken(Base):
+    """A single-use, expiring token for email verification or password reset.
+
+    Only a hash is stored. These tokens are password-equivalent - one is enough
+    to take over an account - so a database dump must not hand out working
+    reset links. The raw value exists only in the email that was sent.
+
+    `purpose` is checked on use so a verification link can never be replayed as
+    a password reset.
+    """
+
+    __tablename__ = "auth_tokens"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    expires_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    used_at: Mapped[str | None] = mapped_column(String(64))

@@ -38,3 +38,28 @@ class TokenResponse(BaseModel):
 class MeResponse(BaseModel):
     user: UserOut
     workspaces: list[WorkspaceOut]
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class AuthActionResponse(BaseModel):
+    """Result of an email-driven action.
+
+    `email_sent` is the truth about delivery, not a reassurance: when SMTP is
+    unconfigured the interface needs to say so rather than send the user to
+    watch an inbox that will never receive anything.
+    """
+
+    message: str
+    email_sent: bool = False
