@@ -67,6 +67,10 @@ class LeadOut(BaseModel):
     id: str
     workspace_id: str
     company: CompanyOut
+    # False until this workspace unlocks the lead. While false the contact
+    # details above are stripped from the response rather than merely hidden
+    # by the interface, so the paywall cannot be read around in devtools.
+    contact_revealed: bool = True
     status: LeadStatus
     score: int
     score_breakdown: list[ScoreBreakdownItem]

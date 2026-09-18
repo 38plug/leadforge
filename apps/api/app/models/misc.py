@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, ForeignKey, Integer, String
+from sqlalchemy import JSON, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -80,3 +80,22 @@ class Coupon(Base):
     expires_at: Mapped[str | None] = mapped_column(String(64))
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     created_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+
+
+class LeadReveal(Base):
+    """Records that a workspace has unlocked one lead's contact details.
+
+    This is the unit the plan is metered in. It exists as its own table rather
+    than as a UsageRecord row so that (workspace, lead) can be unique: opening
+    the same lead a second time must not consume quota again, or the counter
+    would measure clicking rather than leads and punish ordinary use.
+    """
+
+    __tablename__ = "lead_reveals"
+    __table_args__ = (UniqueConstraint("workspace_id", "lead_id", name="uq_reveal_workspace_lead"),)
+
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True, nullable=False)
+    lead_id: Mapped[str] = mapped_column(ForeignKey("leads.id"), index=True, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
+    # "YYYY-MM": quota is a monthly allowance, so usage is counted per period.
+    period: Mapped[str] = mapped_column(String(20), index=True, nullable=False)

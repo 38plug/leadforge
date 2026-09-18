@@ -107,3 +107,25 @@ class DeleteAccountRequest(BaseModel):
     password rather than a checkbox."""
 
     password: str
+
+
+class LeadRevealOut(BaseModel):
+    """What unlocking a lead returns: the details, and what it cost."""
+
+    lead_id: str
+    phone: str | None
+    email: str | None
+    maps_url: str | None
+    website: str | None
+    used: int
+    limit: int
+    remaining: int
+
+
+class QuotaOut(BaseModel):
+    plan: str
+    used: int
+    limit: int
+    remaining: int
+    exhausted: bool
+    period: str

@@ -2,19 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_workspace
+from app.core.deps import get_current_user, get_current_workspace
 from app.db.session import get_db
 from app.models.campaign import CampaignRecipient
 from app.models.company import Company, Contact, SocialProfile, Website, WebsiteStatus
 from app.models.lead import Lead, LeadActivity, LeadStatus, Note, Task
 from app.models.misc import AIAnalysis
 from app.models.search import SearchHistory
-from app.models.workspace import Workspace
+from app.models.workspace import User, Workspace
 from app.providers.business import BusinessSearchFilters, get_business_provider
 from app.providers.website import get_website_provider
 from app.schemas.ai import AILeadAnalysis
 from app.schemas.lead import LeadOut, LeadSearchRequest, LeadSearchResult, LeadStatusUpdate
 from app.services.lead_scoring import LeadScoreService, ScoringInput
+from app.services import quota as quota_service
+from app.schemas.admin import LeadRevealOut
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -31,6 +33,29 @@ def _lead_query(db: Session, workspace_id: str):
     )
 
 
+def _serialise(db: Session, workspace_id: str, leads: list[Lead]) -> list[LeadOut]:
+    """Serialise leads, removing contact details the workspace has not unlocked.
+
+    The redaction happens here rather than in the interface: an unlocked lead's
+    phone number is the thing being sold, so it must not travel in a response
+    the user has not paid for.
+    """
+    revealed = quota_service.revealed_lead_ids(db, workspace_id)
+    out: list[LeadOut] = []
+    for lead in leads:
+        model = LeadOut.model_validate(lead)
+        model.contact_revealed = lead.id in revealed
+        if not model.contact_revealed:
+            for contact in model.company.contacts:
+                contact.phone = None
+                contact.email = None
+            # The maps link carries the exact coordinates, which is most of
+            # what the address is worth, so it is withheld too.
+            model.company.maps_url = None
+        out.append(model)
+    return out
+
+
 @router.get("", response_model=list[LeadOut])
 def list_leads(
     status_filter: LeadStatus | None = None,
@@ -40,7 +65,7 @@ def list_leads(
     query = _lead_query(db, workspace.id)
     if status_filter:
         query = query.filter(Lead.status == status_filter)
-    return query.order_by(Lead.score.desc()).all()
+    return _serialise(db, workspace.id, query.order_by(Lead.score.desc()).all())
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
@@ -253,7 +278,13 @@ def search_leads(
     for lead in created_leads:
         db.refresh(lead)
 
-    return LeadSearchResult(total_found=len(created_leads), leads=created_leads)
+    # Search finds and saves the leads; it does not unlock them. Charging a
+    # whole page of quota for one search would spend a FREE plan's month in two
+    # searches, and the user has not looked at any of them yet.
+    return LeadSearchResult(
+        total_found=len(created_leads),
+        leads=_serialise(db, workspace.id, created_leads),
+    )
 
 
 @router.get("/{lead_id}", response_model=LeadOut)
@@ -261,7 +292,7 @@ def get_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace =
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
-    return lead
+    return _serialise(db, workspace.id, [lead])[0]
 
 
 @router.patch("/{lead_id}", response_model=LeadOut)
@@ -327,3 +358,58 @@ def analyze_lead(
     db.commit()
 
     return analysis
+
+@router.post("/{lead_id}/reveal", response_model=LeadRevealOut)
+def reveal_lead_contact(
+    lead_id: str,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+):
+    """Unlock one lead's contact details, consuming one of the plan's leads.
+
+    Unlocking the same lead again is free and returns the same details, so the
+    number counts leads rather than clicks.
+    """
+    lead = (
+        _lead_query(db, workspace.id)
+        .filter(Lead.id == lead_id)
+        .first()
+    )
+    if not lead:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
+
+    try:
+        quota_service.reveal_lead(db, workspace, lead_id, user.id)
+    except quota_service.QuotaExceeded as exc:
+        # 402 rather than 403: the request is understood and the caller is
+        # allowed to make it - they have simply used the month's allowance.
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            {
+                "code": "QUOTA_EXCEEDED",
+                "message": (
+                    f"You have unlocked all {exc.limit} leads included in the "
+                    f"{exc.plan} plan this month. Your allowance resets at the start "
+                    "of next month, or upgrade for a larger one."
+                ),
+                "used": exc.used,
+                "limit": exc.limit,
+                "plan": exc.plan,
+            },
+        ) from exc
+
+    db.commit()
+    state = quota_service.quota_state(db, workspace)
+    contact = lead.company.contacts[0] if lead.company.contacts else None
+    return LeadRevealOut(
+        lead_id=lead.id,
+        phone=contact.phone if contact else None,
+        email=contact.email if contact else None,
+        maps_url=lead.company.maps_url,
+        website=lead.company.website.website_url if lead.company.website else None,
+        used=int(state["used"]),
+        limit=int(state["limit"]),
+        remaining=int(state["remaining"]),
+    )
+

@@ -30,6 +30,7 @@ from app.schemas.workspace import (
     WorkspaceMemberOut,
     WorkspaceUpdateRequest,
 )
+from app.services import quota as quota_service
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
 
@@ -128,7 +129,13 @@ def get_usage(db: Session = Depends(get_db), workspace: Workspace = Depends(get_
         .count()
     )
 
+    quota = quota_service.quota_state(db, workspace)
+
     return UsageOut(
+        lead_reveals=int(quota["used"]),
+        lead_reveals_limit=int(quota["limit"]),
+        lead_reveals_remaining=int(quota["remaining"]),
+        quota_exhausted=bool(quota["exhausted"]),
         lead_searches=lead_searches,
         ai_analyses=ai_analyses,
         emails_sent=emails_sent,
