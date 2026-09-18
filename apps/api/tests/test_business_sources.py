@@ -250,3 +250,40 @@ def test_one_healthy_mirror_keeps_overpass_in_play():
         OSMBusinessProvider._record_mirror_failure(url)
 
     assert not OSMBusinessProvider()._every_mirror_is_cooling_down()
+
+
+# ------------------------------------------------- country-scale bounding boxes
+
+
+def test_a_box_that_crosses_the_antimeridian_is_replaced():
+    """The United States' bounding box wraps past 180 degrees because of the
+    Aleutians. Used as a rectangle it covers most of the planet, and a search
+    inside it returned 2 businesses for the entire country."""
+    south, west, north, east = NominatimBusinessProvider._usable_bbox(
+        south=18.9, west=172.4, north=71.4, east=-66.9, centre_lat=39.8, centre_lon=-98.6
+    )
+    assert west < east, "the repaired box must not be inverted"
+    assert south <= 39.8 <= north, "it must still contain the country's own point"
+    assert west <= -98.6 <= east
+
+
+def test_an_enormous_box_is_narrowed_around_the_country():
+    """Russia spans far too much longitude to be searched as one rectangle."""
+    south, west, north, east = NominatimBusinessProvider._usable_bbox(
+        south=41.2, west=19.6, north=81.9, east=180.0, centre_lat=55.8, centre_lon=37.6
+    )
+    assert (east - west) <= 24.0 + 1e-9
+    assert (north - south) <= 24.0 + 1e-9
+    assert south <= 55.8 <= north and west <= 37.6 <= east
+
+
+def test_a_normal_country_box_is_left_alone():
+    """Portugal is a perfectly reasonable rectangle and must not be narrowed,
+    or a country-wide search would cover only the capital."""
+    original = (36.9, -9.5, 42.2, -6.2)
+    assert NominatimBusinessProvider._usable_bbox(*original, centre_lat=39.6, centre_lon=-8.0) == original
+
+
+def test_a_city_box_is_left_alone():
+    original = (38.69, -9.23, 38.80, -9.09)
+    assert NominatimBusinessProvider._usable_bbox(*original, centre_lat=38.72, centre_lon=-9.14) == original

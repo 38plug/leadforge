@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, SlidersHorizontal, Radar, Globe2 } from "lucide-react";
+import { Search, Loader2, SlidersHorizontal, Radar, Globe2, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -265,8 +265,12 @@ export default function DiscoverPage() {
               {searching ? "Searching..." : "Find opportunities"}
             </Button>
             {!canSearch && !searching && (
-              <p className="-mt-2 text-2xs text-subtle-foreground">
-                Pick a country, or enter a city, to run a search.
+              <p className="-mt-2 flex items-start gap-1.5 text-2xs text-subtle-foreground">
+                <Info className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
+                <span>
+                  Choose a country or type a city first — a search needs somewhere to look.
+                  Either one on its own is enough.
+                </span>
               </p>
             )}
           </div>
@@ -320,7 +324,7 @@ export default function DiscoverPage() {
               <EmptyState
                 icon={Radar}
                 title="No search run yet"
-                description="Choose a market and an industry, then run a search. Businesses without a website score highest — they're the clearest opportunity."
+                description="Pick a country — or a specific city — and run a search. Businesses without a website score highest, because they're the clearest opportunity."
               />
             )}
 

@@ -50,6 +50,12 @@ MIN_MIRROR_ATTEMPT_SECONDS = 12.0
 # short enough that a mirror which recovers is used again promptly.
 MIRROR_COOLDOWN_SECONDS = 300.0
 
+# Widest box a country-level search will use. Beyond this a bounding box stops
+# describing anywhere in particular, so the search is centred on the country's
+# own coordinates instead. ~24 degrees covers a large populated region while
+# still being somewhere rather than everywhere.
+MAX_COUNTRY_SPAN_DEGREES = 24.0
+
 OVERFETCH_FACTOR = 3
 MAX_OVERPASS_LIMIT = 300
 
@@ -688,7 +694,48 @@ class NominatimBusinessProvider(BusinessSearchProvider):
         south, north, west, east = (float(v) for v in place["boundingbox"])
         canonical = str(place.get("display_name", "")).split(",")[0].strip() or None
         self._expected_country_code = ((place.get("address") or {}).get("country_code") or "").lower() or None
+
+        south, west, north, east = self._usable_bbox(
+            south, west, north, east, float(place["lat"]), float(place["lon"])
+        )
         return GeocodeResult(bbox=(south, west, north, east), canonical_city=canonical)
+
+    @staticmethod
+    def _usable_bbox(
+        south: float,
+        west: float,
+        north: float,
+        east: float,
+        centre_lat: float,
+        centre_lon: float,
+        max_span: float = MAX_COUNTRY_SPAN_DEGREES,
+    ) -> tuple[float, float, float, float]:
+        """Return a box that still describes the place when used as a rectangle.
+
+        Some countries have boxes that are useless as rectangles. The United
+        States reaches across the antimeridian because of the Aleutians, so its
+        box spans nearly the whole planet and a search inside it returned 2
+        businesses for the entire country. Russia and New Zealand have the same
+        problem.
+
+        Where the box is unusable the search is centred on the country's own
+        representative point instead. That covers a populated region rather
+        than an ocean, which is the difference between a country-wide search
+        returning a usable sample and returning nothing.
+        """
+        spans_antimeridian = east < west
+        too_wide = (east - west) > max_span or (north - south) > max_span
+
+        if not spans_antimeridian and not too_wide:
+            return south, west, north, east
+
+        half = max_span / 2
+        return (
+            max(-90.0, centre_lat - half),
+            max(-180.0, centre_lon - half),
+            min(90.0, centre_lat + half),
+            min(180.0, centre_lon + half),
+        )
 
     def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
         place = self._place_bbox(filters.city, filters.country)
@@ -704,27 +751,33 @@ class NominatimBusinessProvider(BusinessSearchProvider):
         results: list[BusinessResult] = []
         seen: set[str] = set()
 
+        base_params: dict[str, str | int] = {
+            "format": "jsonv2",
+            "limit": self.MAX_RESULTS_PER_QUERY,
+            "extratags": 1,
+            "addressdetails": 1,
+        }
+
+        # The viewbox is what actually produces volume: it anchors the search
+        # geographically, and Nominatim returns very little without one -
+        # filtering by country alone dropped Portugal from 25 results to 2.
+        # bounded=1 makes it a hard restriction rather than a preference,
+        # without which results leak to a same-named place elsewhere.
+        base_params["viewbox"] = f"{west},{north},{east},{south}"
+        base_params["bounded"] = 1
+        if self._expected_country_code:
+            # Belt and braces: the box is a rectangle and a country is not, so
+            # this keeps border regions of neighbouring countries out.
+            base_params["countrycodes"] = self._expected_country_code
+
         for phrase in self._phrases_for_niche(filters.niche):
             if len(results) >= filters.limit:
                 break
             OSMBusinessProvider._respect_nominatim_rate_limit(self)
+            params = {**base_params, "q": phrase}
             try:
                 with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
-                    response = client.get(
-                        self.SEARCH_URL,
-                        params={
-                            "q": phrase,
-                            "format": "jsonv2",
-                            "limit": self.MAX_RESULTS_PER_QUERY,
-                            "extratags": 1,
-                            "addressdetails": 1,
-                            # bounded=1 makes the viewbox a hard restriction
-                            # rather than a preference. Without it results leak
-                            # to a same-named place on another continent.
-                            "viewbox": f"{west},{north},{east},{south}",
-                            "bounded": 1,
-                        },
-                    )
+                    response = client.get(self.SEARCH_URL, params=params)
                     response.raise_for_status()
                     payload = response.json()
             except Exception as exc:  # noqa: BLE001 - try the next phrase
