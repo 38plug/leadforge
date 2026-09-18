@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/toast";
 import { initials } from "@/lib/utils";
 import { useApi } from "@/lib/use-api";
 import { api, ApiError } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import type { ApiUsage, ApiWorkspaceMember } from "@/types/api";
 import { Trash2, AlertTriangle, Compass } from "lucide-react";
@@ -26,8 +27,16 @@ const PLANS = [
   { key: "BUSINESS", name: "Business", price: "Custom", searches: "Unlimited", ai: "Unlimited", seats: -1 },
 ];
 
+const TABS: Tab[] = ["general", "email", "billing", "team"];
+
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("general");
+  // Deep-linkable, so the sidebar's usage meter can open straight to Billing
+  // rather than dropping the user on General to hunt for it.
+  const searchParams = useSearchParams();
+  const requested = searchParams.get("tab") as Tab | null;
+  const [tab, setTab] = useState<Tab>(
+    requested && TABS.includes(requested) ? requested : "general"
+  );
   const [replayingTour, setReplayingTour] = useState(false);
   const { workspace, user } = useAuth();
   const { toast } = useToast();

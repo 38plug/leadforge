@@ -136,7 +136,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {!collapsed && (
         <div className="px-3 pb-2">
-          <div className="rounded-lg border border-border bg-surface p-3">
+          <Link
+            href="/settings?tab=billing"
+            onClick={onNavigate}
+            aria-label={`Workspace usage: ${used} of ${limit} searches used. Open billing.`}
+            className="surface surface-interactive block rounded-lg p-3"
+          >
             <div className="flex items-center justify-between gap-2">
               <p className="truncate text-xs font-medium">{workspace?.name ?? "Workspace"}</p>
               <span className="shrink-0 rounded-sm border border-primary/25 bg-primary/12 px-1.5 py-0.5 text-2xs font-semibold text-primary">
@@ -160,8 +165,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <div className="h-full rounded-full bg-primary/80" style={{ width: `${pct}%` }} />
               </div>
+              <p className="pt-0.5 text-2xs text-subtle-foreground">View plan and usage</p>
             </div>
-          </div>
+          </Link>
         </div>
       )}
 
