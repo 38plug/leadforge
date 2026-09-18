@@ -11,6 +11,9 @@ Failing to boot is the point. A deployment that stops is noticed and fixed in
 minutes; one that silently serves forgeable tokens is not noticed at all.
 """
 
+import os
+from pathlib import Path
+
 from app.core.config import Settings
 
 
@@ -46,4 +49,52 @@ def verify_production_safety(settings: Settings) -> None:
             "Refusing to start: ENVIRONMENT=production with development "
             "defaults still in place.\n\n"
             + "\n\n".join(f"  * {problem}" for problem in problems)
+            + "\n\n"
+            + describe_config_sources()
         )
+
+
+def describe_config_sources() -> str:
+    """Report where configuration was looked for, without printing any values.
+
+    When a deployment refuses to start, the next question is always "but I did
+    set that", and the answer is usually a file under the wrong name or in the
+    wrong place. Only names are listed here, never values, because this text
+    goes straight into deploy logs.
+    """
+    lines = ["Where configuration was looked for:"]
+
+    for label, path in (("secret file", Path("/etc/secrets/.env")), ("local env file", Path(".env"))):
+        if not path.exists():
+            lines.append(f"  - {label} {path}: NOT FOUND")
+            continue
+        try:
+            keys = [
+                line.split("=", 1)[0].strip()
+                for line in path.read_text(encoding="utf-8").splitlines()
+                if "=" in line and not line.lstrip().startswith("#")
+            ]
+        except OSError as exc:
+            lines.append(f"  - {label} {path}: found but unreadable ({exc})")
+            continue
+        lines.append(
+            f"  - {label} {path}: found, defines {len(keys)} key(s): "
+            + (", ".join(keys) or "none")
+        )
+
+    secrets_dir = Path("/etc/secrets")
+    if secrets_dir.is_dir():
+        names = sorted(entry.name for entry in secrets_dir.iterdir())
+        lines.append("  - files mounted in /etc/secrets: " + (", ".join(names) or "none"))
+        if names and ".env" not in names:
+            lines.append(
+                "    NOTE: a secret file is mounted, but none is named '.env' - "
+                "that is the only name this app reads. Rename it to '.env'."
+            )
+    else:
+        lines.append("  - /etc/secrets does not exist (no secret files mounted)")
+
+    present = [k for k in ("DATABASE_URL", "JWT_SECRET", "SECRET_ENCRYPTION_KEY") if os.environ.get(k)]
+    lines.append("  - set as real environment variables: " + (", ".join(present) or "none"))
+
+    return "\n".join(lines)

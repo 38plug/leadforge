@@ -54,3 +54,29 @@ def test_non_production_keeps_the_zero_setup_defaults(environment):
 def test_the_check_is_case_insensitive_about_the_environment_name():
     with pytest.raises(InsecureProductionConfigError):
         verify_production_safety(settings(environment="PRODUCTION"))
+
+
+def test_failure_message_says_where_configuration_was_looked_for():
+    """"But I did set that" is the next question after a refused deploy, so the
+    error names every place the value could have come from."""
+    with pytest.raises(InsecureProductionConfigError) as excinfo:
+        verify_production_safety(settings(environment="production"))
+    message = str(excinfo.value)
+    assert "Where configuration was looked for" in message
+    assert "/etc/secrets" in message
+
+
+def test_diagnostics_never_print_secret_values(tmp_path, monkeypatch):
+    """The message goes into deploy logs, so it lists key names only."""
+    from app.core import startup_checks
+
+    env_file = tmp_path / ".env"
+    env_file.write_text("JWT_SECRET=super-secret-value\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:hunter2@host/db")
+
+    report = startup_checks.describe_config_sources()
+
+    assert "JWT_SECRET" in report, "key names are useful and expected"
+    assert "super-secret-value" not in report
+    assert "hunter2" not in report
