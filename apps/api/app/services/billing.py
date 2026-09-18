@@ -120,7 +120,7 @@ def ensure_customer(
     if subscription.external_customer_id:
         return subscription.external_customer_id
 
-    customer = client(settings).customers.create(
+    customer = client(settings).v1.customers.create(
         params={
             "email": email,
             "name": workspace.name,
@@ -162,7 +162,7 @@ def create_checkout_session(
 
     customer_id = ensure_customer(db, settings, workspace, email)
 
-    session = client(settings).checkout.sessions.create(
+    session = client(settings).v1.checkout.sessions.create(
         params={
             "mode": "subscription",
             "customer": customer_id,
@@ -196,7 +196,7 @@ def create_portal_session(db: Session, settings: Settings, workspace: Workspace,
     if not subscription.external_customer_id:
         raise BillingNotConfigured("This workspace has no billing account yet.")
 
-    session = client(settings).billing_portal.sessions.create(
+    session = client(settings).v1.billing_portal.sessions.create(
         params={"customer": subscription.external_customer_id, "return_url": return_url}
     )
     return session.url

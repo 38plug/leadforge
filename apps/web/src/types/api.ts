@@ -250,6 +250,12 @@ export interface ApiUsage {
   emails_sent: number;
   team_members: number;
   plan: string;
+  // Lead unlocks: the metered unit. The limit comes from the API so the
+  // interface cannot disagree with the server about someone's plan.
+  lead_reveals?: number;
+  lead_reveals_limit?: number;
+  lead_reveals_remaining?: number;
+  quota_exhausted?: boolean;
 }
 
 export interface ApiNotification {

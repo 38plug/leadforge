@@ -16,6 +16,7 @@ import type { ApiUsage, ApiWorkspaceMember } from "@/types/api";
 import { Trash2, AlertTriangle, Compass } from "lucide-react";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { EmailSettings } from "@/components/settings/email-settings";
+import { BillingPanel } from "@/components/settings/billing-panel";
 
 type Tab = "general" | "email" | "billing" | "team";
 
@@ -219,53 +220,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      {tab === "billing" && (
-        <div className="flex flex-col gap-4">
-          {usageLoading && <LoadingState label="Loading usage..." />}
-          {usageError && <ErrorState message={usageError} onRetry={refetchUsage} />}
-          {usage && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Usage This Month</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Usage label="Lead Searches" value={usage.lead_searches.toString()} limit="—" />
-                <Usage label="AI Analyses" value={usage.ai_analyses.toString()} limit="—" />
-                <Usage label="Emails Sent" value={usage.emails_sent.toString()} limit="—" />
-                <Usage label="Team Members" value={usage.team_members.toString()} limit="—" />
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
-            {PLANS.map((plan) => {
-              const isCurrent = workspace?.plan === plan.key;
-              return (
-                <Card key={plan.key} className={isCurrent ? "border-primary" : undefined}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>{plan.name}</CardTitle>
-                      {isCurrent && <Badge>Current</Badge>}
-                    </div>
-                    <p className="text-xl font-semibold">{plan.price}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-                    <p>{plan.searches} lead searches</p>
-                    <p>{plan.ai} AI analyses</p>
-                    <p>{plan.seats === -1 ? "Unlimited" : plan.seats} seats</p>
-                    <Button variant={isCurrent ? "outline" : "default"} size="sm" className="mt-2" disabled={isCurrent}>
-                      {isCurrent ? "Current Plan" : "Upgrade"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Payment processing is not yet connected. This screen reflects the billing architecture — plug in Stripe (or another provider) via <code className="rounded bg-muted px-1 py-0.5 font-mono">apps/api/app/services/billing.py</code>.
-          </p>
-        </div>
-      )}
+      {tab === "billing" && <BillingPanel />}
 
       {tab === "team" && (
         <Card>

@@ -217,7 +217,7 @@ def _sync_from_stripe(db: Session, settings: Settings, subscription_id: str | No
 
 def client_subscription(settings: Settings, subscription_id: str):
     try:
-        return billing.client(settings).subscriptions.retrieve(subscription_id)
+        return billing.client(settings).v1.subscriptions.retrieve(subscription_id)
     except stripe.StripeError as exc:
         logger.warning("Could not read subscription %s from Stripe: %s", subscription_id, exc)
         return None
