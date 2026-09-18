@@ -13,7 +13,15 @@ class Settings(BaseSettings):
     back to a mock implementation so the app always runs locally.
     """
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # "/etc/secrets/.env" is where Render mounts a Secret File, which is the
+    # one location it guarantees regardless of the service's root directory.
+    # Listing it last means it wins over a local .env, so a deployed secret is
+    # never shadowed by a file that happened to ship in the image. Both are
+    # optional: a missing env file is not an error.
+    model_config = SettingsConfigDict(
+        env_file=(".env", "/etc/secrets/.env"),
+        extra="ignore",
+    )
 
     app_name: str = "LeadForge API"
     environment: str = "development"
