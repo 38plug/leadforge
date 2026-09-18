@@ -19,7 +19,7 @@ export function HeroMockup() {
         className="pointer-events-none absolute -inset-10 -z-10 rounded-[40px] opacity-70 blur-[70px]"
         style={{ background: "radial-gradient(circle, hsl(var(--glow-strong) / 0.55), transparent 70%)" }}
       />
-      <div className="animate-float glow-ring rounded-2xl border border-white/10 bg-[#0c0e14]/95 shadow-2xl shadow-black/60">
+      <div className="animate-float glow-ring rounded-2xl border border-white/10 bg-[#101116]/95 shadow-2xl shadow-black/60">
         <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3.5">
           <span className="h-2.5 w-2.5 rounded-full bg-white/15" />
           <span className="h-2.5 w-2.5 rounded-full bg-white/15" />

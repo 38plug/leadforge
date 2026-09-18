@@ -17,25 +17,31 @@ import {
 } from "recharts";
 import type { ApiAcquisitionPoint, ApiFunnelStage, ApiOutreachPoint } from "@/types/api";
 
-const GREEN = "hsl(150 82% 55%)";
-const AMBER = "hsl(38 95% 58%)";
-const GRID = "hsl(150 15% 22%)";
-const AXIS_TICK = "hsl(150 10% 66%)";
+// Charts read the interface palette rather than carrying their own. These
+// were left green when the theme moved to violet, which put mint-coloured
+// charts on every dashboard.
+const ACCENT = "hsl(258 90% 66%)";
+const AMBER = "hsl(38 84% 56%)";
+const GRID = "hsl(228 14% 17%)";
+const AXIS_TICK = "hsl(228 7% 62%)";
 
+// A single hue stepped in lightness, so the funnel reads as one quantity
+// getting smaller rather than as five unrelated categories. Amber marks the
+// final stage, which is the one being converted toward.
 const FUNNEL_FILLS = [
-  "hsl(150 70% 38%)",
-  "hsl(150 72% 45%)",
-  "hsl(150 75% 52%)",
-  "hsl(150 78% 60%)",
+  "hsl(258 60% 42%)",
+  "hsl(258 70% 52%)",
+  "hsl(258 82% 60%)",
+  "hsl(258 90% 70%)",
   AMBER,
 ];
 
 const tooltipStyle = {
-  background: "hsl(150 20% 12%)",
-  border: "1px solid hsl(150 15% 22%)",
-  borderRadius: 8,
+  background: "hsl(228 16% 11%)",
+  border: "1px solid hsl(228 14% 24%)",
+  borderRadius: 10,
   fontSize: 12,
-  color: "hsl(140 18% 94%)",
+  color: "hsl(240 9% 96%)",
 };
 
 /** "2026-09-16" -> "Tue 16" — short enough for a dense axis. */
@@ -68,8 +74,8 @@ export function AcquisitionChart({ data }: { data: ApiAcquisitionPoint[] }) {
         <AreaChart data={rows} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="found" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={GREEN} stopOpacity={0.4} />
-              <stop offset="100%" stopColor={GREEN} stopOpacity={0} />
+              <stop offset="0%" stopColor={ACCENT} stopOpacity={0.4} />
+              <stop offset="100%" stopColor={ACCENT} stopOpacity={0} />
             </linearGradient>
             <linearGradient id="won" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={AMBER} stopOpacity={0.35} />
@@ -87,7 +93,7 @@ export function AcquisitionChart({ data }: { data: ApiAcquisitionPoint[] }) {
             domain={domainFor(rows.flatMap((r) => [r.found, r.won]))}
           />
           <Tooltip contentStyle={tooltipStyle} />
-          <Area type="monotone" dataKey="found" stroke={GREEN} fill="url(#found)" strokeWidth={2.5} name="Leads added" />
+          <Area type="monotone" dataKey="found" stroke={ACCENT} fill="url(#found)" strokeWidth={2.5} name="Leads added" />
           <Area type="monotone" dataKey="won" stroke={AMBER} fill="url(#won)" strokeWidth={2.5} name="Won" />
         </AreaChart>
       </ResponsiveContainer>
@@ -115,7 +121,7 @@ export function OutreachChart({ data }: { data: ApiOutreachPoint[] }) {
             domain={domainFor(rows.flatMap((r) => [r.sent, r.replied]))}
           />
           <Tooltip contentStyle={tooltipStyle} cursor={{ fill: GRID }} />
-          <Bar dataKey="sent" fill={GREEN} radius={[3, 3, 0, 0]} name="Sent" />
+          <Bar dataKey="sent" fill={ACCENT} radius={[3, 3, 0, 0]} name="Sent" />
           <Bar dataKey="replied" fill={AMBER} radius={[3, 3, 0, 0]} name="Replied" />
         </BarChart>
       </ResponsiveContainer>
@@ -147,7 +153,7 @@ export function PipelineFunnelChart({ data }: { data: ApiFunnelStage[] }) {
       <FunnelChart>
         <Tooltip contentStyle={tooltipStyle} />
         <Funnel dataKey="value" data={data} isAnimationActive>
-          <LabelList position="right" dataKey="name" fill="hsl(140 18% 94%)" stroke="none" fontSize={11} />
+          <LabelList position="right" dataKey="name" fill="hsl(240 9% 96%)" stroke="none" fontSize={11} />
           {data.map((stage, index) => (
             <Cell key={stage.name} fill={FUNNEL_FILLS[index % FUNNEL_FILLS.length]} />
           ))}

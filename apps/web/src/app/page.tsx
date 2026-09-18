@@ -54,7 +54,7 @@ const STATS = [
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#081410] text-white">
+    <div className="relative min-h-screen overflow-x-clip bg-[#08090C] text-white">
       {/* repeated logo watermark — subtle brand texture, never behind body copy */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <LogoPattern opacity={0.02} className="absolute inset-0" />

@@ -28,7 +28,7 @@ export function LandingNav() {
           backgroundSize: "200% 100%",
         }}
       >
-        <div className="flex items-center justify-between gap-4 rounded-full bg-[#0a1310]/95 px-3 py-2 backdrop-blur-xl">
+        <div className="flex items-center justify-between gap-4 rounded-full bg-[#08090C]/95 px-3 py-2 backdrop-blur-xl">
           <Link href="/" className="group flex items-center gap-2.5 pl-2">
             <div className="transition-transform duration-300 group-hover:scale-110">
               <LogoMark size={30} />

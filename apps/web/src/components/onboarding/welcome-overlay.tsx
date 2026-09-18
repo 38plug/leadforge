@@ -26,7 +26,7 @@ export function WelcomeOverlay({ name, onDone }: { name: string; onDone: () => v
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-0 z-[120] flex items-center justify-center bg-[#050b08]/95 backdrop-blur-sm transition-opacity duration-500 ${
+      className={`fixed inset-0 z-[120] flex items-center justify-center bg-[#08090C]/95 backdrop-blur-sm transition-opacity duration-500 ${
         leaving ? "opacity-0" : "opacity-100"
       }`}
     >
