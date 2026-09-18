@@ -201,6 +201,12 @@ class OSMBusinessProvider(BusinessSearchProvider):
         "https://overpass-api.de/api/interpreter",
         "https://overpass.kumi.systems/api/interpreter",
         "https://overpass.private.coffee/api/interpreter",
+        # Slower than the others (~20s) but answering when the rest were not,
+        # which is exactly when a fourth mirror earns its place. Regional
+        # mirrors are deliberately excluded: overpass.osm.ch, for instance,
+        # answers 200 with zero elements outside Switzerland, which would read
+        # as "no businesses here" rather than as a failure.
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     )
 
     _last_nominatim_call: float = 0.0
@@ -374,7 +380,16 @@ class OSMBusinessProvider(BusinessSearchProvider):
                 logger.info("Overpass budget exhausted; skipping %s", ", ".join(skipped))
                 break
 
-            attempt_timeout = min(self.timeout_seconds, remaining)
+            # Each mirror still waiting gets an equal share of what is left.
+            # Giving the first mirror the full per-request timeout let one hung
+            # instance eat the whole budget and leave a healthy mirror further
+            # down the list untried — the common case, since at any moment
+            # some of these volunteer instances are unresponsive.
+            mirrors_left = len(mirrors) - index
+            attempt_timeout = min(
+                self.timeout_seconds,
+                max(MIN_MIRROR_ATTEMPT_SECONDS, remaining / mirrors_left),
+            )
             # Keep the server's own budget under our HTTP timeout so a slow
             # mirror answers with an error we can act on rather than holding
             # the connection until the client gives up.

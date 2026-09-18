@@ -249,11 +249,20 @@ def test_mirrors_share_one_wall_clock_budget():
 
     assert excinfo.value.retryable is True
     assert sum(timeouts) <= 60.0, "mirrors together must not outlast the budget"
-    assert timeouts == [45.0, 15.0], "the second attempt gets only the budget left"
+    mirror_count = len(OSMBusinessProvider.OVERPASS_URLS)
+    assert len(timeouts) == mirror_count, "every mirror is tried; none starved by an earlier one"
+    expected_share = max(MIN_MIRROR_ATTEMPT_SECONDS, 60.0 / mirror_count)
+    assert timeouts == [pytest.approx(expected_share)] * mirror_count, (
+        "the budget is split evenly across the mirrors"
+    )
 
 
 def test_mirror_attempt_is_skipped_rather_than_started_without_time_to_finish():
-    provider = OSMBusinessProvider(timeout_seconds=45.0, total_budget_seconds=50.0)
+    """A sliver of budget left is worse than none: starting an attempt that
+    cannot finish only delays the error the user needs to see."""
+    # 30s across 3 mirrors is 10s each, below the minimum worth attempting, so
+    # each gets the 12s floor and the third has nothing left.
+    provider = OSMBusinessProvider(timeout_seconds=45.0, total_budget_seconds=30.0)
     clock = _FakeClock()
     attempts: list[str] = []
 
@@ -277,9 +286,8 @@ def test_mirror_attempt_is_skipped_rather_than_started_without_time_to_finish():
                         BusinessSearchFilters(city="Berlin", country="Germany", niche="Cafe")
                     )
 
-    # 50s budget - 45s first attempt = 5s left, under the minimum worth trying.
-    assert len(attempts) == 1
-    assert 50.0 - 45.0 < MIN_MIRROR_ATTEMPT_SECONDS
+    assert len(attempts) == 2, "the third mirror has under MIN_MIRROR_ATTEMPT_SECONDS left"
+    assert 30.0 - 2 * MIN_MIRROR_ATTEMPT_SECONDS < MIN_MIRROR_ATTEMPT_SECONDS
 
 
 def test_consecutive_searches_start_from_different_mirrors():
@@ -402,3 +410,47 @@ def test_the_callers_limit_is_still_respected_after_over_fetching():
     )
 
     assert len(results) == 5
+
+
+def test_a_hung_mirror_does_not_starve_a_healthy_one():
+    """
+    Regression guard for a live failure: two of the three mirrors were
+    unresponsive, the first consumed the whole 45s per-request timeout, the
+    second took what was left, and the third — which was working — was never
+    tried. Every search failed after ~62s while a healthy mirror sat idle.
+    """
+    provider = OSMBusinessProvider(timeout_seconds=45.0, total_budget_seconds=60.0)
+    clock = _FakeClock()
+    attempted: list[str] = []
+    healthy = OSMBusinessProvider.OVERPASS_URLS[-1]
+
+    def client_factory(timeout=None, headers=None):
+        client = MagicMock()
+
+        def post(url, data=None):
+            attempted.append(url)
+            if url == healthy:
+                response = MagicMock()
+                response.status_code = 200
+                response.raise_for_status.return_value = None
+                response.json.return_value = {"elements": [_osm_node(1, "Cafe Nord")]}
+                clock.advance(2.0)
+                return response
+            clock.advance(timeout)  # hung until the attempt times out
+            raise TimeoutError("read timed out")
+
+        client.post.side_effect = post
+        ctx = MagicMock()
+        ctx.__enter__.return_value = client
+        return ctx
+
+    OSMBusinessProvider._mirror_cursor = 0  # start at the head, healthy mirror last
+    with _berlin_geocode(provider):
+        with patch("app.providers.business.time.monotonic", clock.monotonic):
+            with patch("httpx.Client", side_effect=client_factory):
+                results = provider.search(
+                    BusinessSearchFilters(city="Berlin", country="Germany", niche="Cafe")
+                )
+
+    assert [r.name for r in results] == ["Cafe Nord"]
+    assert healthy in attempted, "the working mirror must be reached"
