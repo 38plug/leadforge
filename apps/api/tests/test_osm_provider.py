@@ -6,11 +6,23 @@ from unittest.mock import MagicMock, patch
 from app.providers.business import (
     MAX_BBOX_SPAN_DEGREES,
     MIN_MIRROR_ATTEMPT_SECONDS,
+    MIRROR_COOLDOWN_SECONDS,
     BusinessSearchFilters,
     GeocodeResult,
     OSMBusinessProvider,
 )
 from app.providers.errors import ProviderError
+
+
+@pytest.fixture(autouse=True)
+def _reset_mirror_state():
+    """Mirror health and rotation are class-level, so they would otherwise leak
+    between tests and make ordering assertions depend on execution order."""
+    OSMBusinessProvider._mirror_failed_at = {}
+    OSMBusinessProvider._mirror_cursor = 0
+    yield
+    OSMBusinessProvider._mirror_failed_at = {}
+    OSMBusinessProvider._mirror_cursor = 0
 
 
 def test_instagram_handle_extracted_from_bare_tag():
@@ -454,3 +466,59 @@ def test_a_hung_mirror_does_not_starve_a_healthy_one():
 
     assert [r.name for r in results] == ["Cafe Nord"]
     assert healthy in attempted, "the working mirror must be reached"
+
+
+def test_a_failed_mirror_is_tried_last_on_the_next_search():
+    """
+    Rotation alone made every search re-learn which instances are down: two
+    dead mirrors ate the whole budget, the user saw an outage message, and
+    clicking again repeated it. A failure is remembered instead.
+    """
+    provider = OSMBusinessProvider()
+    dead, alive = OSMBusinessProvider.OVERPASS_URLS[0], OSMBusinessProvider.OVERPASS_URLS[1]
+
+    OSMBusinessProvider._record_mirror_failure(dead)
+    OSMBusinessProvider._record_mirror_success(alive)
+
+    order = provider._mirrors_in_rotation()
+    assert order[-1] == dead, "a mirror known to be down is tried last"
+    assert set(order) == set(OSMBusinessProvider.OVERPASS_URLS), "none is dropped"
+
+
+def test_a_recovered_mirror_returns_to_normal_rotation():
+    """Deprioritising must expire, or a mirror that had one bad minute would be
+    permanently demoted."""
+    provider = OSMBusinessProvider()
+    dead = OSMBusinessProvider.OVERPASS_URLS[0]
+
+    clock = _FakeClock()
+    with patch("app.providers.business.time.monotonic", clock.monotonic):
+        OSMBusinessProvider._record_mirror_failure(dead)
+        assert provider._mirrors_in_rotation()[-1] == dead
+
+        clock.advance(MIRROR_COOLDOWN_SECONDS + 1)
+        OSMBusinessProvider._mirror_cursor = 0
+        assert provider._mirrors_in_rotation()[0] == dead, "back at the head of the rotation"
+
+
+def test_a_total_outage_still_attempts_every_mirror():
+    """When everything is cooling down, the least-recently-failed order is still
+    better than refusing to try at all."""
+    provider = OSMBusinessProvider()
+    for url in OSMBusinessProvider.OVERPASS_URLS:
+        OSMBusinessProvider._record_mirror_failure(url)
+
+    order = provider._mirrors_in_rotation()
+    assert set(order) == set(OSMBusinessProvider.OVERPASS_URLS)
+    assert len(order) == len(OSMBusinessProvider.OVERPASS_URLS)
+
+
+def test_a_successful_response_clears_an_earlier_failure():
+    provider = OSMBusinessProvider()
+    url = OSMBusinessProvider.OVERPASS_URLS[0]
+    OSMBusinessProvider._record_mirror_failure(url)
+    assert url in OSMBusinessProvider._mirror_failed_at
+
+    OSMBusinessProvider._record_mirror_success(url)
+    assert url not in OSMBusinessProvider._mirror_failed_at
+    assert provider._mirrors_in_rotation()[0] == url

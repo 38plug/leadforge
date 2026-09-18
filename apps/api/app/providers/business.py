@@ -31,7 +31,11 @@ MAX_BBOX_SPAN_DEGREES = 0.24
 # full per-request timeout. Trying three mirrors back-to-back at 45s each let a
 # failing search hold the user for ~108s (measured against the live mirrors)
 # before showing an error — long past the point they'd have given up.
-OVERPASS_TOTAL_BUDGET_SECONDS = 60.0
+#
+# Split across four mirrors this leaves ~22s each. The slowest instance that
+# still answers reliably took 21s when measured, and cutting it off just before
+# it responds turns a working search into an outage message.
+OVERPASS_TOTAL_BUDGET_SECONDS = 90.0
 
 # Below this there isn't enough budget left for a mirror to plausibly answer,
 # so the remaining ones are skipped instead of being burned on a doomed attempt
@@ -41,6 +45,11 @@ MIN_MIRROR_ATTEMPT_SECONDS = 12.0
 # Chain outlets are filtered out after the query, so more rows are requested
 # than the caller asked for. Overpass' cost is dominated by scanning the box,
 # not by how many matches it returns, so this is close to free.
+# How long a mirror stays deprioritised after it fails. Long enough that a
+# burst of searches doesn't keep rediscovering the same dead instance,
+# short enough that a mirror which recovers is used again promptly.
+MIRROR_COOLDOWN_SECONDS = 300.0
+
 OVERFETCH_FACTOR = 3
 MAX_OVERPASS_LIMIT = 300
 
@@ -216,6 +225,10 @@ class OSMBusinessProvider(BusinessSearchProvider):
     # slice of its budget; rotating spreads our load across the volunteers too.
     _mirror_cursor: int = 0
 
+    # url -> monotonic time of its last failure. Shared across requests so
+    # one search's discovery that a mirror is down benefits the next.
+    _mirror_failed_at: dict[str, float] = {}
+
     def __init__(
         self,
         contact: str | None = None,
@@ -349,11 +362,32 @@ class OSMBusinessProvider(BusinessSearchProvider):
         return f"[out:json][timeout:{server_budget_seconds}];\n(\n{clauses});\nout center {limit};"
 
     def _mirrors_in_rotation(self) -> tuple[str, ...]:
-        """The mirrors to try, starting from a different one each search."""
+        """The mirrors to try, healthy ones first.
+
+        Rotation alone made every search re-learn which instances are down: a
+        user clicking "Find Leads" would spend the whole budget on two dead
+        mirrors, see an outage message, and have to click again. Mirrors that
+        failed recently are moved to the back instead of being dropped, so a
+        recovered instance is still reachable and a total outage still tries
+        everything before giving up.
+        """
         cls = OSMBusinessProvider
         offset = cls._mirror_cursor % len(cls.OVERPASS_URLS)
         cls._mirror_cursor = offset + 1
-        return cls.OVERPASS_URLS[offset:] + cls.OVERPASS_URLS[:offset]
+        rotated = cls.OVERPASS_URLS[offset:] + cls.OVERPASS_URLS[:offset]
+
+        now = time.monotonic()
+        healthy = [u for u in rotated if now - cls._mirror_failed_at.get(u, 0.0) >= MIRROR_COOLDOWN_SECONDS]
+        cooling = [u for u in rotated if u not in healthy]
+        return tuple(healthy + cooling)
+
+    @classmethod
+    def _record_mirror_failure(cls, url: str) -> None:
+        cls._mirror_failed_at[url] = time.monotonic()
+
+    @classmethod
+    def _record_mirror_success(cls, url: str) -> None:
+        cls._mirror_failed_at.pop(url, None)
 
     def _run_overpass(self, build_query: Callable[[int], str]) -> list[dict]:
         """Ask Overpass mirrors in turn, returning the first real answer.
@@ -404,13 +438,16 @@ class OSMBusinessProvider(BusinessSearchProvider):
                 # 429/5xx mean this mirror is saturated, not that the query
                 # is wrong — move on to the next one.
                 if response.status_code in (429, 502, 503, 504):
+                    self._record_mirror_failure(url)
                     failures.append(f"{url} -> HTTP {response.status_code}")
                     logger.info("Overpass mirror busy (%s): HTTP %s", url, response.status_code)
                     continue
 
                 response.raise_for_status()
+                self._record_mirror_success(url)
                 return response.json().get("elements", [])
             except Exception as exc:  # noqa: BLE001 — try the next mirror
+                self._record_mirror_failure(url)
                 failures.append(f"{url} -> {type(exc).__name__}")
                 logger.info("Overpass mirror failed (%s): %s", url, exc)
 
