@@ -1,21 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2, SlidersHorizontal, AlertTriangle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Search, Loader2, SlidersHorizontal, Radar, Globe2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { LeadStatusBadge, ScorePill, WebsiteStatusBadge } from "@/components/leads/badges";
+import { PageHeader } from "@/components/layout/page-header";
+import { DiscoveryResultCard } from "@/components/leads/discovery-result-card";
+import { EmptyState, ErrorState, ProgressSteps, SkeletonRows } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api";
 import { adaptLead } from "@/lib/adapters";
 import type { LeadSearchFilters, LeadSearchResult } from "@/types/api";
 import type { Lead, WebsiteStatus } from "@/types/lead";
-import { formatNumber } from "@/lib/utils";
 import { COUNTRIES } from "@/lib/countries";
-import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 const NICHES = [
   "Restaurant", "Barber", "Beauty Salon", "Dentist", "Gym", "Hotel", "Real Estate",
@@ -29,18 +28,26 @@ const WEBSITE_OPTIONS: { value: WebsiteStatus | "ANY"; label: string }[] = [
   { value: "NO_WEBSITE", label: "No website" },
   { value: "ACTIVE", label: "Website detected" },
   { value: "OUTDATED", label: "Website appears outdated" },
-  { value: "INACCESSIBLE", label: "Website inaccessible" },
+  { value: "INACCESSIBLE", label: "Website unreachable" },
   { value: "UNKNOWN", label: "Unknown" },
 ];
 
 const SCORE_OPTIONS = [
-  { value: 0, label: "Any score" },
+  { value: 0, label: "Any" },
   { value: 70, label: "70+" },
   { value: 80, label: "80+" },
   { value: 90, label: "90+" },
 ];
 
-export default function LeadFinderPage() {
+/** The stages the backend actually performs, in the order it performs them. */
+const SEARCH_STEPS = [
+  "Querying OpenStreetMap",
+  "Checking website status",
+  "Scoring opportunities",
+  "Saving leads",
+];
+
+export default function DiscoverPage() {
   const { toast } = useToast();
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
@@ -54,30 +61,35 @@ export default function LeadFinderPage() {
   const [requireInstagram, setRequireInstagram] = useState(false);
 
   const [searching, setSearching] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [step, setStep] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<{ message: string; retryable: boolean } | null>(null);
   const [results, setResults] = useState<Lead[]>([]);
-  // Captured at search time so the results header keeps showing what was
+  // Captured at search time so the results header keeps describing what was
   // actually searched, even if the filters are edited afterwards.
   const [searchedLocation, setSearchedLocation] = useState("");
+  const [searchedNiche, setSearchedNiche] = useState("");
 
   const effectiveNiche = customNiche.trim() || niche;
+  const canSearch = Boolean(city.trim() || country);
 
   async function runSearch() {
-    // A search needs somewhere to look, but a city is no longer required:
-    // with only a country, results are drawn from across it.
-    if (!city.trim() && !country) return;
+    if (!canSearch) return;
 
     setSearching(true);
-    setProgress(15);
+    setStep(0);
     setHasSearched(false);
     setSearchError(null);
     setSearchedLocation([city.trim(), country].filter(Boolean).join(", ") || "anywhere");
+    setSearchedNiche(effectiveNiche);
 
-    const progressTimer = setInterval(() => {
-      setProgress((p) => (p < 85 ? p + 15 : p));
-    }, 300);
+    // The API performs these stages in order but does not stream progress, so
+    // the indicator advances on elapsed time. It never reaches the final step
+    // on its own - only a real response completes it - so it cannot claim the
+    // work finished when it did not.
+    const stepTimer = setInterval(() => {
+      setStep((current) => (current < SEARCH_STEPS.length - 2 ? current + 1 : current));
+    }, 4000);
 
     const filters: LeadSearchFilters = {
       country: country || undefined,
@@ -95,61 +107,55 @@ export default function LeadFinderPage() {
     try {
       const result = await api.post<LeadSearchResult>("/api/leads/search", { filters });
       setResults(result.leads.map(adaptLead));
-      setProgress(100);
-      setTimeout(() => {
-        setSearching(false);
-        setHasSearched(true);
-      }, 250);
+      setStep(SEARCH_STEPS.length);
+      setHasSearched(true);
     } catch (err) {
-      clearInterval(progressTimer);
-      setSearching(false);
       const message = err instanceof ApiError ? err.message : "Please try again";
       // Kept on screen as well as toasted: a provider outage must never be
       // mistaken for "this city has no businesses", and a toast disappears.
-      setSearchError({ message, retryable: err instanceof ApiError ? Boolean(err.retryable) : false });
+      setSearchError({
+        message,
+        retryable: err instanceof ApiError ? Boolean(err.retryable) : false,
+      });
       toast({ title: "Search failed", description: message, variant: "error" });
     } finally {
-      clearInterval(progressTimer);
+      clearInterval(stepTimer);
+      setSearching(false);
     }
   }
 
+  const noWebsiteCount = results.filter((lead) => lead.websiteStatus === "NO_WEBSITE").length;
+  const strongCount = results.filter((lead) => lead.score.score >= 80).length;
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Lead Finder</h1>
-        <p className="text-sm text-muted-foreground">
-          Discover businesses that are ready for a better website.
-        </p>
-      </div>
+      <PageHeader
+        title="Discover opportunities"
+        description="Find real businesses that may need a better web presence. Results come from OpenStreetMap and are checked live."
+      />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[340px_1fr]">
-        <Card className="h-fit">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-              <CardTitle>Filters</CardTitle>
-            </div>
-            <CardDescription>Data source: configured Business Provider</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground" htmlFor="country">
-                Country
-              </label>
-              <select
-                id="country"
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-              >
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
+        {/* ---------------------------------------------------------- filters */}
+        <div className="surface h-fit rounded-xl xl:sticky xl:top-20">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+            <SlidersHorizontal className="h-4 w-4 text-subtle-foreground" aria-hidden="true" />
+            <h3 className="text-sm font-semibold">Search</h3>
+          </div>
+
+          <div className="flex flex-col gap-4 p-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="country">Country</label>
+              <Select id="country" value={country} onChange={(e) => setCountry(e.target.value)}>
                 <option value="">Any country</option>
                 {COUNTRIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-              </select>
+              </Select>
+            </div>
 
-              <label className="mt-1 text-xs font-medium text-muted-foreground" htmlFor="city">
-                City <span className="font-normal opacity-70">(optional)</span>
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="city">
+                City <span className="normal-case tracking-normal opacity-70">(optional)</span>
               </label>
               <Input
                 id="city"
@@ -157,48 +163,67 @@ export default function LeadFinderPage() {
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
               />
-              <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Search anywhere in the world. A city gives the most thorough results; leave it blank to search a
-                whole country and get a spread of businesses from across it. Chain and franchise outlets are left
-                out — their websites are decided at corporate, so there&apos;s no local owner to pitch.
+              <p className="text-2xs leading-relaxed text-subtle-foreground">
+                A city gives the most thorough results. Leave it blank to search a whole country.
+                Chains and franchises are excluded — their websites are decided at corporate.
               </p>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Industry / Niche</label>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                value={niche}
-                onChange={(e) => setNiche(e.target.value)}
-              >
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="niche">Industry</label>
+              <Select id="niche" value={niche} onChange={(e) => setNiche(e.target.value)}>
                 <option value="">Any industry</option>
                 {NICHES.map((n) => (
                   <option key={n} value={n}>{n}</option>
                 ))}
-              </select>
+              </Select>
               <Input
-                placeholder="Custom niche (overrides dropdown)"
+                placeholder="Or type a custom niche"
                 value={customNiche}
                 onChange={(e) => setCustomNiche(e.target.value)}
+                aria-label="Custom niche, overrides the dropdown"
               />
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Website Status</label>
-              <select
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="website-status">Website status</label>
+              <Select
+                id="website-status"
                 value={websiteStatus}
                 onChange={(e) => setWebsiteStatus(e.target.value as WebsiteStatus | "ANY")}
               >
-                {WEBSITE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {WEBSITE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
-              </select>
+              </Select>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Minimum Rating</label>
+            <div className="flex flex-col gap-1.5">
+              <span className="label-caps">Minimum score</span>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Minimum opportunity score">
+                {SCORE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={minScore === option.value}
+                    onClick={() => setMinScore(option.value)}
+                    className={cn(
+                      "rounded-sm border px-2.5 py-1 text-2xs font-medium transition-colors",
+                      minScore === option.value
+                        ? "border-primary/40 bg-primary/12 text-primary"
+                        : "border-border text-muted-foreground hover:border-border-strong hover:text-foreground"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="min-rating">Minimum rating</label>
               <Input
+                id="min-rating"
                 type="number"
                 min={0}
                 max={5}
@@ -210,162 +235,114 @@ export default function LeadFinderPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Lead Score</label>
-              <div className="flex flex-wrap gap-1.5">
-                {SCORE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setMinScore(opt.value)}
-                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                      minScore === opt.value
-                        ? "border-primary bg-primary/15 text-primary"
-                        : "border-border text-muted-foreground hover:bg-accent"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              <span className="label-caps">Must have</span>
+              {[
+                { key: "phone", label: "Phone number", value: requirePhone, set: setRequirePhone },
+                { key: "email", label: "Email address", value: requireEmail, set: setRequireEmail },
+                { key: "instagram", label: "Instagram", value: requireInstagram, set: setRequireInstagram },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.value}
+                    onChange={(e) => item.set(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded-sm border-border accent-[hsl(var(--primary))]"
+                  />
+                  {item.label}
+                </label>
+              ))}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-muted-foreground">Contact Availability</label>
-              <div className="flex flex-col gap-1.5">
-                {[
-                  { key: "phone", label: "Phone", value: requirePhone, set: setRequirePhone },
-                  { key: "email", label: "Email", value: requireEmail, set: setRequireEmail },
-                  { key: "instagram", label: "Instagram", value: requireInstagram, set: setRequireInstagram },
-                ].map((item) => (
-                  <label key={item.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={item.value}
-                      onChange={(e) => item.set(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-input"
-                    />
-                    {item.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <Button onClick={runSearch} disabled={searching || (!city.trim() && !country)} className="w-full">
-              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {searching ? "Searching..." : "Find Leads"}
+            <Button onClick={runSearch} disabled={searching || !canSearch} className="w-full">
+              {searching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              {searching ? "Searching..." : "Find opportunities"}
             </Button>
-            {!city.trim() && !country && !searching && (
-              <p className="-mt-3 text-[11px] text-muted-foreground">
+            {!canSearch && !searching && (
+              <p className="-mt-2 text-2xs text-subtle-foreground">
                 Pick a country, or enter a city, to run a search.
               </p>
             )}
+          </div>
+        </div>
 
-            {searching && (
-              <div className="flex flex-col gap-1.5">
-                <Progress value={progress} />
-                <p className="text-[11px] text-muted-foreground">
-                  {progress < 40 && "Querying business data providers..."}
-                  {progress >= 40 && progress < 70 && "Detecting website status..."}
-                  {progress >= 70 && progress < 100 && "Scoring opportunities..."}
-                  {progress === 100 && "Done"}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Results</CardTitle>
-              <CardDescription>
+        {/* ---------------------------------------------------------- results */}
+        <div className="surface flex min-h-[520px] flex-col rounded-xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold">Results</h3>
+              <p className="mt-0.5 truncate text-2xs text-subtle-foreground">
                 {hasSearched
-                  ? `${results.length} businesses saved as leads${searchedLocation ? ` in ${searchedLocation}` : ""}`
-                  : "Run a search to see results"}
-              </CardDescription>
+                  ? `${results.length} saved as leads in ${searchedLocation}`
+                  : "Set your filters and run a search"}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5">
-              {hasSearched && searchedLocation && <Badge variant="outline">{searchedLocation}</Badge>}
-              {hasSearched && effectiveNiche && <Badge variant="secondary">{effectiveNiche}</Badge>}
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {!hasSearched && !searching && !searchError && (
-              <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-                <Search className="h-8 w-8 text-muted-foreground/50" />
-                <p className="text-sm font-medium">No search run yet</p>
-                <p className="max-w-sm text-xs text-muted-foreground">
-                  Set your filters and click &ldquo;Find Leads&rdquo; to discover businesses that are ready for a better website.
-                </p>
-              </div>
-            )}
-
-            {searchError && !searching && (
-              <div className="animate-rise-in flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-                <AlertTriangle className="h-7 w-7 text-warning" />
-                <p className="text-sm font-medium">The search could not be completed</p>
-                <p className="max-w-md text-xs leading-relaxed text-muted-foreground">{searchError.message}</p>
-                {searchError.retryable && (
-                  <Button size="sm" variant="outline" className="mt-2" onClick={runSearch}>
-                    Try again
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {hasSearched && !searchError && results.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-                <p className="text-sm font-medium">No businesses matched</p>
-                <p className="max-w-sm text-xs text-muted-foreground">
-                  Try widening your filters — fewer requirements, a different niche, or a nearby larger city.
-                  Double-check the city spelling matches the selected country.
-                </p>
-              </div>
-            )}
-
             {hasSearched && results.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-y border-border text-xs text-muted-foreground">
-                      <th className="px-4 py-2 font-medium">Company</th>
-                      <th className="px-4 py-2 font-medium">Niche</th>
-                      <th className="px-4 py-2 font-medium">Location</th>
-                      <th className="px-4 py-2 font-medium">Rating</th>
-                      <th className="px-4 py-2 font-medium">Reviews</th>
-                      <th className="px-4 py-2 font-medium">Website</th>
-                      <th className="px-4 py-2 font-medium">Score</th>
-                      <th className="px-4 py-2 font-medium">Status</th>
-                      <th className="px-4 py-2 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((lead) => (
-                      <tr key={lead.id} className="row-hover border-b border-border last:border-0">
-                        <td className="px-4 py-2.5">
-                          <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
-                            {lead.company}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{lead.niche}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{lead.city}, {lead.country}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{lead.rating ?? "—"}</td>
-                        <td className="px-4 py-2.5 tabular-nums">{lead.reviews ? formatNumber(lead.reviews) : "—"}</td>
-                        <td className="px-4 py-2.5"><WebsiteStatusBadge status={lead.websiteStatus} /></td>
-                        <td className="px-4 py-2.5"><ScorePill score={lead.score.score} /></td>
-                        <td className="px-4 py-2.5"><LeadStatusBadge status={lead.status} /></td>
-                        <td className="px-4 py-2.5 text-right">
-                          <Link href={`/leads/${lead.id}`}>
-                            <Button size="sm" variant="outline">View</Button>
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {noWebsiteCount > 0 && (
+                  <Badge variant="signal" dot>{noWebsiteCount} with no website</Badge>
+                )}
+                {strongCount > 0 && <Badge variant="default">{strongCount} scoring 80+</Badge>}
+                {searchedNiche && <Badge variant="outline">{searchedNiche}</Badge>}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+
+          <div className="flex-1 p-4">
+            {searching && (
+              <div className="flex flex-col gap-5">
+                <div className="rounded-lg border border-border bg-background/40 p-4">
+                  <ProgressSteps steps={SEARCH_STEPS} activeIndex={step} />
+                  <p className="mt-3 border-t border-border pt-3 text-2xs text-subtle-foreground">
+                    Live searches against OpenStreetMap can take up to a minute.
+                  </p>
+                </div>
+                <SkeletonRows rows={4} />
+              </div>
+            )}
+
+            {!searching && searchError && (
+              <ErrorState
+                title="This search could not be completed"
+                message={searchError.message}
+                retryable={searchError.retryable}
+                onRetry={runSearch}
+              />
+            )}
+
+            {!searching && !searchError && !hasSearched && (
+              <EmptyState
+                icon={Radar}
+                title="No search run yet"
+                description="Choose a market and an industry, then run a search. Businesses without a website score highest — they're the clearest opportunity."
+              />
+            )}
+
+            {!searching && !searchError && hasSearched && results.length === 0 && (
+              <EmptyState
+                icon={Globe2}
+                title="No businesses matched"
+                description="The search completed, but nothing in this area matched your filters. Try fewer requirements, a different industry, or a nearby larger city."
+              />
+            )}
+
+            {!searching && !searchError && results.length > 0 && (
+              <ul className="stagger flex flex-col gap-2.5">
+                {results.map((lead) => (
+                  <li key={lead.id}>
+                    <DiscoveryResultCard lead={lead} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

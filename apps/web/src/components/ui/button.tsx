@@ -3,23 +3,36 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+/**
+ * One accent button per view, at most.
+ *
+ * On a near-black interface the eye goes straight to the brightest thing on
+ * screen, so `default` is reserved for the single action a screen exists to
+ * perform - run the search, save the lead. Everything else is `secondary`,
+ * `outline` or `ghost`, which is what keeps the accent meaningful.
+ */
 const buttonVariants = cva(
-  "press inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50",
+  "press relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-45",
   {
     variants: {
       variant: {
-        default: "bg-gradient-brand text-brand-ink font-semibold glow-btn transition-transform hover:brightness-110 hover:scale-[1.02]",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline: "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        default:
+          "bg-gradient-brand text-brand-ink font-semibold shadow-accent hover:brightness-[1.08] hover:shadow-[0_8px_30px_-8px_hsl(var(--glow-strong)/0.95)]",
+        secondary:
+          "border border-border bg-secondary text-secondary-foreground hover:border-border-strong hover:bg-accent",
+        outline:
+          "border border-border bg-transparent text-foreground hover:border-border-strong hover:bg-accent",
+        ghost: "text-muted-foreground hover:bg-accent hover:text-foreground",
+        destructive:
+          "bg-destructive/90 text-destructive-foreground hover:bg-destructive",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-6",
+        default: "h-9 px-4",
+        sm: "h-8 rounded-sm px-3 text-xs",
+        lg: "h-11 rounded-lg px-6 text-[15px]",
         icon: "h-9 w-9",
+        "icon-sm": "h-8 w-8 rounded-sm",
       },
     },
     defaultVariants: {

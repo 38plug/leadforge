@@ -2,18 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, Search } from "lucide-react";
+import { Download, Search, ArrowUpDown, Radar, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
+import { PageHeader } from "@/components/layout/page-header";
 import { LeadStatusBadge, ScorePill, WebsiteStatusBadge } from "@/components/leads/badges";
-import { LoadingState, ErrorState, EmptyState } from "@/components/ui/state";
+import { ErrorState, EmptyState, SkeletonRows } from "@/components/ui/state";
 import { formatNumber } from "@/lib/utils";
 import { useApi } from "@/lib/use-api";
 import { adaptLead } from "@/lib/adapters";
 import type { ApiLead } from "@/types/api";
 import type { Lead } from "@/types/lead";
-import { Users } from "lucide-react";
 
 const PAGE_SIZE = 10;
 
@@ -100,58 +100,124 @@ export default function LeadsPage() {
     else setSelected(new Set(pageItems.map((l) => l.id)));
   }
 
-  if (loading) return <LoadingState label="Loading leads..." />;
-  if (error) return <ErrorState message={error} onRetry={refetch} />;
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Leads" description="Every business you have saved." />
+        <Card className="p-4">
+          <SkeletonRows rows={8} />
+        </Card>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Leads" description="Every business you have saved." />
+        <Card>
+          <ErrorState title="Your leads could not be loaded" message={error} onRetry={refetch} />
+        </Card>
+      </div>
+    );
+  }
+
   if (allLeads.length === 0) {
     return (
-      <EmptyState
-        icon={Users}
-        title="No leads yet"
-        description="Run a search in Lead Finder or import a CSV to start building your list."
-      />
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Leads" description="Every business you have saved." />
+        <Card>
+          <EmptyState
+            icon={Radar}
+            title="No leads yet"
+            description="Your next client could be one search away. Run a search and LeadForge will save what it finds here."
+            action={
+              <Button asChild>
+                <Link href="/lead-finder">Discover businesses</Link>
+              </Button>
+            }
+          />
+        </Card>
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Leads</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} leads · {selected.size} selected</p>
+      <PageHeader
+        title="Leads"
+        description={`${filtered.length} ${filtered.length === 1 ? "lead" : "leads"} in your workspace.`}
+        actions={
+          <>
+            <Button asChild variant="secondary">
+              <Link href="/lead-finder">
+                <Radar className="h-4 w-4" />
+                Discover more
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                exportToCsv(selected.size ? allLeads.filter((l) => selected.has(l.id)) : filtered)
+              }
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </>
+        }
+      />
+
+      {/* Bulk bar appears only with a selection, so the toolbar is not
+          permanently occupied by actions that cannot be used. */}
+      {selected.size > 0 && (
+        <div className="animate-rise-in flex flex-wrap items-center gap-3 rounded-lg border border-primary/25 bg-primary/[0.07] px-4 py-2.5">
+          <span className="text-[13px] font-medium">
+            <span className="numeric">{selected.size}</span> selected
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => exportToCsv(allLeads.filter((l) => selected.has(l.id)))}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export selection
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => exportToCsv(selected.size ? allLeads.filter((l) => selected.has(l.id)) : filtered)}>
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
-        </div>
-      </div>
+      )}
 
       <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle>All Leads</CardTitle>
-            <CardDescription>Saved leads across all searches and imports</CardDescription>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b border-border">
+          <div className="min-w-0">
+            <CardTitle>All leads</CardTitle>
+            <CardDescription>Saved from every search you have run.</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <select
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
               aria-label="Filter by country"
               value={countryFilter}
               onChange={(e) => { setCountryFilter(e.target.value); setPage(1); }}
-              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              className="w-auto min-w-[140px]"
             >
               <option value="">All countries</option>
               {availableCountries.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
-            </select>
-            <div className="relative w-56">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </Select>
+            <div className="relative w-full sm:w-60">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle-foreground" />
               <Input
-                placeholder="Search company, niche, city..."
+                placeholder="Search business, niche, city..."
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 className="pl-8"
+                aria-label="Search leads"
               />
             </div>
           </div>
@@ -160,56 +226,56 @@ export default function LeadsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-y border-border text-xs text-muted-foreground">
-                  <th className="w-10 px-4 py-2">
+                <tr className="border-b border-border">
+                  <th scope="col" className="w-10 px-4 py-2.5">
                     <input
                       type="checkbox"
                       checked={pageItems.length > 0 && selected.size === pageItems.length}
                       onChange={toggleSelectAll}
-                      className="h-3.5 w-3.5 rounded border-input"
+                      className="h-3.5 w-3.5 rounded-sm border-border accent-[hsl(var(--primary))]"
                     />
                   </th>
-                  <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => toggleSort("company")}>Company</th>
-                  <th className="px-4 py-2 font-medium">Niche</th>
-                  <th className="px-4 py-2 font-medium">Location</th>
-                  <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => toggleSort("rating")}>Rating</th>
-                  <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => toggleSort("reviews")}>Reviews</th>
-                  <th className="px-4 py-2 font-medium">Website</th>
-                  <th className="px-4 py-2 font-medium">Phone</th>
-                  <th className="px-4 py-2 font-medium">Email</th>
-                  <th className="px-4 py-2 font-medium">Instagram</th>
-                  <th className="cursor-pointer px-4 py-2 font-medium" onClick={() => toggleSort("score")}>Score</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium text-right">Actions</th>
+                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("company")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Company<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Niche</th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Location</th>
+                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("rating")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Rating<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
+                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("reviews")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Reviews<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Website</th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Phone</th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Email</th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Instagram</th>
+                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("score")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Score<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
+                  <th scope="col" className="label-caps px-4 py-2.5">Status</th>
+                  <th scope="col" className="label-caps px-4 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pageItems.map((lead) => (
-                  <tr key={lead.id} className="row-hover border-b border-border last:border-0">
-                    <td className="px-4 py-2.5">
+                  <tr key={lead.id} className="row-hover border-b border-border/60 last:border-0">
+                    <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selected.has(lead.id)}
                         onChange={() => toggleSelect(lead.id)}
-                        className="h-3.5 w-3.5 rounded border-input"
+                        className="h-3.5 w-3.5 rounded-sm border-border accent-[hsl(var(--primary))]"
                       />
                     </td>
-                    <td className="px-4 py-2.5">
-                      <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">{lead.company}</Link>
+                    <td className="px-4 py-3">
+                      <Link href={`/leads/${lead.id}`} className="font-medium transition-colors hover:text-primary">{lead.company}</Link>
                     </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{lead.niche}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{lead.city}, {lead.country}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{lead.rating ?? "—"}</td>
-                    <td className="px-4 py-2.5 tabular-nums">{lead.reviews ? formatNumber(lead.reviews) : "—"}</td>
-                    <td className="px-4 py-2.5"><WebsiteStatusBadge status={lead.websiteStatus} /></td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{lead.phone ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{lead.email ?? "—"}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{lead.social.instagram ? `@${lead.social.instagram}` : "—"}</td>
-                    <td className="px-4 py-2.5"><ScorePill score={lead.score.score} /></td>
-                    <td className="px-4 py-2.5"><LeadStatusBadge status={lead.status} /></td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{lead.niche}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{lead.city}, {lead.country}</td>
+                    <td className="numeric px-4 py-3 text-xs">{lead.rating ?? "—"}</td>
+                    <td className="numeric px-4 py-3 text-xs">{lead.reviews ? formatNumber(lead.reviews) : "—"}</td>
+                    <td className="px-4 py-3"><WebsiteStatusBadge status={lead.websiteStatus} /></td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{lead.phone ?? "—"}</td>
+                    <td className="max-w-[180px] truncate px-4 py-3 text-xs text-muted-foreground">{lead.email ?? "—"}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{lead.social.instagram ? `@${lead.social.instagram}` : "—"}</td>
+                    <td className="px-4 py-3"><ScorePill score={lead.score.score} /></td>
+                    <td className="px-4 py-3"><LeadStatusBadge status={lead.status} /></td>
+                    <td className="px-4 py-3 text-right">
                       <Link href={`/leads/${lead.id}`}>
-                        <Button size="sm" variant="outline">View</Button>
+                        <Button size="sm" variant="secondary">View</Button>
                       </Link>
                     </td>
                   </tr>
@@ -219,10 +285,10 @@ export default function LeadsPage() {
           </div>
 
           <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
-            <span>Page {page} of {totalPages}</span>
+            <span className="numeric">Page {page} of {totalPages}</span>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button size="sm" variant="outline" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              <Button size="sm" variant="secondary" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <Button size="sm" variant="secondary" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
             </div>
           </div>
         </CardContent>

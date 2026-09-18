@@ -2,64 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 150 25% 97%;
-  --foreground: 152 30% 9%;
-  --card: 0 0% 100%;
-  --card-foreground: 152 30% 9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 152 30% 9%;
-  --primary: 158 74% 39%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 150 16% 93%;
-  --secondary-foreground: 152 30% 9%;
-  --muted: 150 16% 93%;
-  --muted-foreground: 150 8% 45%;
-  --accent: 150 16% 93%;
-  --accent-foreground: 152 30% 9%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 168 65% 38%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 92% 50%;
-  --warning-foreground: 0 0% 10%;
-  --border: 150 13% 88%;
-  --input: 150 13% 88%;
-  --ring: 158 74% 39%;
-  --radius: 0.5rem;
-  --violet: 84 70% 45%;
-  --glow-strong: 158 74% 39%;
-  --glow-soft: 84 70% 45%;
-}
+/* ======================================================================
+   LeadForge design tokens
 
+   Dark-first: the product is a working surface people keep open all day,
+   so the interface recedes and the data carries the colour. Violet is
+   reserved for things that are actionable or scored - navigation state,
+   primary actions, opportunity - which is what makes it read as signal
+   rather than decoration.
+
+   Every value is a channel triple so Tailwind can compose opacity
+   (bg-primary/15). Both :root and .dark carry the same palette: the app
+   renders dark everywhere, and duplicating them means no flash before
+   the class lands.
+   ====================================================================== */
+
+:root,
 .dark {
-  --background: 150 22% 7.5%;
-  --foreground: 140 18% 94%;
-  --card: 150 20% 10.5%;
-  --card-foreground: 140 18% 94%;
-  --popover: 150 20% 10%;
-  --popover-foreground: 140 18% 94%;
-  --primary: 150 75% 50%;
-  --primary-foreground: 150 35% 7%;
-  --secondary: 150 16% 16%;
-  --secondary-foreground: 140 18% 94%;
-  --muted: 150 14% 16%;
-  --muted-foreground: 150 10% 66%;
-  --accent: 150 18% 19%;
-  --accent-foreground: 140 18% 94%;
-  --destructive: 0 68% 56%;
+  /* --- ground ------------------------------------------------------ */
+  --background: 225 20% 4%;          /* near-black, the page itself     */
+  --surface: 230 16% 8%;             /* panels sitting on the page      */
+  --surface-elevated: 228 16% 11%;   /* menus, popovers, raised cards   */
+
+  --card: 230 16% 8%;
+  --card-foreground: 240 9% 96%;
+  --popover: 228 16% 11%;
+  --popover-foreground: 240 9% 96%;
+
+  /* --- text -------------------------------------------------------- */
+  --foreground: 240 9% 96%;          /* primary copy                    */
+  --muted-foreground: 228 7% 62%;    /* secondary copy                  */
+  --subtle-foreground: 228 7% 45%;   /* labels, timestamps, hints       */
+
+  /* --- lines and fills --------------------------------------------- */
+  --border: 228 14% 17%;             /* ~8% white over the background   */
+  --border-strong: 228 14% 24%;
+  --input: 228 14% 17%;
+  --muted: 228 13% 13%;
+  --secondary: 228 14% 14%;
+  --secondary-foreground: 240 9% 96%;
+  --accent: 228 16% 15%;
+  --accent-foreground: 240 9% 96%;
+
+  /* --- accent ------------------------------------------------------ */
+  --primary: 258 90% 66%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 258 90% 66%;
+  --violet: 258 90% 66%;
+
+  /* --- semantic ---------------------------------------------------- */
+  /* Muted on purpose: a lead table shows dozens of these at once, and
+     saturated status colours turn a working screen into a warning light. */
+  --success: 158 52% 46%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 84% 56%;
+  --warning-foreground: 225 20% 6%;
+  --destructive: 0 62% 58%;
   --destructive-foreground: 0 0% 100%;
-  --success: 168 70% 46%;
-  --success-foreground: 150 35% 7%;
-  --warning: 38 95% 58%;
-  --warning-foreground: 150 35% 7%;
-  --border: 150 15% 20%;
-  --input: 150 15% 20%;
-  --ring: 150 75% 50%;
-  --radius: 0.5rem;
-  --violet: 84 88% 60%;
-  --glow-strong: 150 82% 55%;
-  --glow-soft: 84 88% 60%;
+
+  /* --- glow -------------------------------------------------------- */
+  /* Consumed by the existing motion utilities, so every glow in the app
+     follows the accent without those rules needing to know about it. */
+  --glow-strong: 258 90% 66%;
+  --glow-soft: 272 80% 62%;
+
+  /* --- geometry ---------------------------------------------------- */
+  /* 14px for panels; the scale below derives tighter radii for controls
+     so a button inside a card never looks rounder than the card. */
+  --radius: 0.875rem;
 }
 
 html {
@@ -106,7 +116,8 @@ body {
 }
 
 .text-brand-ink {
-  color: hsl(150 40% 8%);
+  /* Label colour for anything sitting on the accent gradient. */
+  color: hsl(0 0% 100%);
 }
 
 .bg-gradient-brand-wash {
@@ -118,7 +129,7 @@ body {
 }
 
 .glow-btn {
-  box-shadow: 0 0 30px -6px hsl(var(--glow-strong) / 0.75);
+  box-shadow: 0 6px 24px -10px hsl(var(--glow-strong) / 0.85);
 }
 
 .glow-card:hover {
@@ -360,4 +371,135 @@ body {
 @keyframes border-shift {
   0% { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
+}
+
+
+/* ======================================================================
+   Surfaces
+
+   Depth comes from three things stacked in a fixed order - a slightly
+   lighter fill, a hairline top edge catching the light, and a shadow
+   underneath. Keeping that order consistent is what makes panels read as
+   physical rather than as boxes with borders.
+   ====================================================================== */
+
+/* A panel that sits on the page. The inset highlight is a single hairline
+   along the top edge, which is what separates it from the background far
+   more cheaply than a heavy border would. */
+.surface {
+  background: hsl(var(--surface));
+  border: 1px solid hsl(var(--border));
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
+    0 1px 2px 0 hsl(0 0% 0% / 0.4);
+}
+
+/* Menus, popovers, command palette: things that float above the page. */
+.surface-elevated {
+  background: hsl(var(--surface-elevated));
+  border: 1px solid hsl(var(--border-strong));
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+    0 16px 48px -12px hsl(0 0% 0% / 0.7);
+}
+
+/* Translucent panel for anything overlaying content. Used sparingly:
+   blur is expensive and, applied everywhere, reads as a gimmick. */
+.glass {
+  background: hsl(var(--surface) / 0.72);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+}
+
+/* Interactive panel: the border warms toward the accent on hover, which
+   signals "this does something" without moving the layout. */
+.surface-interactive {
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.surface-interactive:hover {
+  border-color: hsl(var(--glow-strong) / 0.35);
+  background: hsl(var(--surface-elevated));
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
+    0 8px 28px -14px hsl(var(--glow-strong) / 0.45);
+}
+
+/* ---- ambient ------------------------------------------------------- */
+
+/* A single soft violet bloom, placed behind a hero or an empty state.
+   One per screen: several at once flattens all of them. */
+.ambient-glow {
+  position: relative;
+}
+.ambient-glow::before {
+  content: "";
+  position: absolute;
+  inset: -40% 10% auto 10%;
+  height: 340px;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    hsl(var(--glow-strong) / 0.16),
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Faint technical grid. Deliberately near-invisible - it should register
+   as texture, never as a pattern competing with the data. */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, hsl(0 0% 100% / 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(0 0% 100% / 0.022) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Breaks up banding across large dark gradients, which is visible on
+   wide displays without it. */
+.noise {
+  position: relative;
+}
+.noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+/* ---- text ---------------------------------------------------------- */
+
+/* Numbers that should be read as figures: tabular so columns align, and
+   tightened because large numerals default to looking loose. */
+.numeric {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Small uppercase label above a value or a section. */
+.label-caps {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(var(--subtle-foreground));
+}
+
+/* ---- focus --------------------------------------------------------- */
+
+/* One visible focus treatment for everything reachable by keyboard.
+   :focus-visible only, so it appears for keyboard users and not on click. */
+.focus-ring:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: calc(var(--radius) - 6px);
 }
