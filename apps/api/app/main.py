@@ -61,6 +61,28 @@ def provider_error_handler(request: Request, exc: ProviderError):
     return JSONResponse(status_code=502, content=exc.to_dict())
 
 
+@app.get("/", include_in_schema=False)
+def root():
+    """Explain what this host is.
+
+    Opening the API's address in a browser is a natural thing to do, and a
+    bare 404 reads as "the site is broken" rather than "this is the wrong
+    address". Pointing at the app costs one route and saves the confusion.
+    """
+    app_url = (settings.cors_origins or ["http://localhost:3000"])[0]
+    return {
+        "service": "LeadForge API",
+        "status": "ok",
+        "message": (
+            "This is the LeadForge API, not the web app. There is nothing to "
+            f"see here in a browser - open {app_url} instead."
+        ),
+        "app": app_url,
+        "docs": "/docs",
+        "health": "/api/health",
+    }
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "environment": settings.environment}

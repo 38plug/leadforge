@@ -40,3 +40,14 @@ def test_requests_without_auth_headers_use_demo_default(client):
     # default user, who has no workspace yet -> 401/403, never leaks data.
     response = client.get("/api/leads")
     assert response.status_code in (401, 403)
+
+
+def test_the_api_root_points_at_the_app(client):
+    """Opening the API address in a browser is a natural mistake, and a bare
+    404 reads as "the site is broken" rather than "wrong address"."""
+    response = client.get("/")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "LeadForge API"
+    assert body["app"].startswith("http")
+    assert "not the web app" in body["message"]
