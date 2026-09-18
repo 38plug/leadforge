@@ -157,6 +157,12 @@ Starter plan removes the spin-down.
 
 ### Pre-deploy checklist
 
+With `ENVIRONMENT=production`, the API refuses to start when `JWT_SECRET` is
+still the built-in default or `DATABASE_URL` still points at SQLite — see
+`app/core/startup_checks.py`. Both states are invisible from outside (the
+health check passes either way) while leaving tokens forgeable or discarding
+every account on restart, so the deploy fails loudly instead.
+
 - [ ] `JWT_SECRET` is a real random value, not the placeholder
 - [ ] `SECRET_ENCRYPTION_KEY` is set to a real Fernet key (required in production — without it, saving a workspace's email settings fails)
 - [ ] `DATABASE_URL` points at managed Postgres, not SQLite

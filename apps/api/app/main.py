@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
+from app.core.startup_checks import verify_production_safety
 from app.db.session import Base, engine
 from app.providers.errors import ProviderError
 from app.routers import (
@@ -25,6 +26,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("leadforge")
 
 settings = get_settings()
+
+# Fail the deploy rather than serve a production API on development
+# defaults — a forgeable signing key or a database that resets on restart
+# is invisible from the outside until it is exploited or data is lost.
+verify_production_safety(settings)
 
 # Auto-creates tables for local dev convenience only (zero-setup SQLite).
 # Staging/production run `alembic upgrade head` (see the Dockerfile CMD)
