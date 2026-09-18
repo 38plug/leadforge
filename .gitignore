@@ -32,3 +32,11 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Local agent tooling and Neon Functions scaffolding (kept on disk, not part of the product)
+.claude/
+skills-lock.json
+neon.ts
+hello.ts
+/package.json
+/package-lock.json
