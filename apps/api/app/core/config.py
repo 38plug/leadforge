@@ -116,6 +116,22 @@ class Settings(BaseSettings):
     # than something a deployment has to remember to set. CORS_ORIGINS
     # overrides this entirely — set it to just your domain(s) if you want the
     # local development origin closed off in production.
+    # --- Billing (Stripe) --------------------------------------------
+    # A restricted key (rk_) is preferred over a secret key: it can be scoped
+    # to just the Billing and Checkout permissions this integration needs, so
+    # a leak cannot move money or read the whole account.
+    stripe_secret_key: str | None = None
+    # Signing secret for the webhook endpoint. Without it every webhook is
+    # rejected, which is correct - an unverified webhook is an unauthenticated
+    # stranger telling you someone paid.
+    stripe_webhook_secret: str | None = None
+
+    # Stripe Price IDs, one per paid plan. Prices live in Stripe rather than
+    # here so amounts, currencies and intervals can change without a deploy.
+    stripe_price_starter: str | None = None
+    stripe_price_pro: str | None = None
+    stripe_price_agency: str | None = None
+
     cors_origins: list[str] = [
         "http://localhost:3000",
         "https://leadforge-wheat-seven.vercel.app",

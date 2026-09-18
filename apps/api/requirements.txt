@@ -12,3 +12,4 @@ redis==5.2.0
 alembic==1.14.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
+stripe==15.6.0

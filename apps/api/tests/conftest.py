@@ -69,3 +69,39 @@ def demo_workspace(db_session):
 @pytest.fixture()
 def auth_headers(demo_workspace):
     return {"X-User-Email": "demo@leadforge.dev", "X-Workspace-Id": demo_workspace.id}
+
+
+@pytest.fixture()
+def app_with_stripe():
+    """Run a test as though Stripe credentials are configured.
+
+    get_settings is lru_cached and read at request time, so the override goes
+    through the dependency rather than the environment.
+    """
+    from app.core.config import Settings, get_settings
+    from app.main import app
+
+    def _configured() -> Settings:
+        return Settings(
+            _env_file=None,
+            stripe_secret_key="rk_test_example",
+            stripe_webhook_secret="whsec_test_secret_value",
+            stripe_price_starter="price_starter",
+            stripe_price_pro="price_pro",
+            stripe_price_agency="price_agency",
+        )
+
+    app.dependency_overrides[get_settings] = _configured
+    yield
+    app.dependency_overrides.pop(get_settings, None)
+
+
+@pytest.fixture()
+def app_no_stripe():
+    """The default state of this installation: billing not yet configured."""
+    from app.core.config import Settings, get_settings
+    from app.main import app
+
+    app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+    yield
+    app.dependency_overrides.pop(get_settings, None)

@@ -12,6 +12,7 @@ from app.routers import (
     account,
     admin,
     ai,
+    billing,
     analytics,
     auth,
     campaigns,
@@ -94,6 +95,7 @@ app.include_router(leads.router)
 app.include_router(companies.router)
 app.include_router(analytics.router)
 app.include_router(account.router)
+app.include_router(billing.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(crm.router)
