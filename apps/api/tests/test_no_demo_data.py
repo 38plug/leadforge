@@ -9,7 +9,13 @@ from app.providers.ai import (
     RuleBasedAIProvider,
     get_ai_provider,
 )
-from app.providers.business import MockBusinessProvider, OSMBusinessProvider, get_business_provider
+from app.providers.business import (
+    FallbackBusinessProvider,
+    MockBusinessProvider,
+    NominatimBusinessProvider,
+    OSMBusinessProvider,
+    get_business_provider,
+)
 from app.providers.email import RecordingEmailProvider, SMTPEmailProvider, get_email_provider
 from app.providers.errors import ProviderError
 
@@ -24,7 +30,20 @@ def make_settings(**overrides) -> Settings:
 
 
 def test_business_provider_defaults_to_real_osm_data():
-    assert isinstance(get_business_provider(make_settings()), OSMBusinessProvider)
+    """The default must serve real businesses from every source in the chain.
+
+    What matters is not which class comes back but that no source in it can
+    fabricate a business, so a shortfall shows up as fewer leads rather than as
+    invented ones.
+    """
+    provider = get_business_provider(make_settings())
+
+    assert isinstance(provider, FallbackBusinessProvider)
+    assert [type(source) for source in provider.providers] == [
+        OSMBusinessProvider,
+        NominatimBusinessProvider,
+    ]
+    assert not any(isinstance(source, MockBusinessProvider) for source in provider.providers)
 
 
 def test_mock_business_provider_is_refused_in_production():

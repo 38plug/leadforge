@@ -65,13 +65,15 @@ export default function LeadFinderPage() {
   const effectiveNiche = customNiche.trim() || niche;
 
   async function runSearch() {
-    if (!city.trim()) return;
+    // A search needs somewhere to look, but a city is no longer required:
+    // with only a country, results are drawn from across it.
+    if (!city.trim() && !country) return;
 
     setSearching(true);
     setProgress(15);
     setHasSearched(false);
     setSearchError(null);
-    setSearchedLocation([city.trim(), country].filter(Boolean).join(", "));
+    setSearchedLocation([city.trim(), country].filter(Boolean).join(", ") || "anywhere");
 
     const progressTimer = setInterval(() => {
       setProgress((p) => (p < 85 ? p + 15 : p));
@@ -147,7 +149,7 @@ export default function LeadFinderPage() {
               </select>
 
               <label className="mt-1 text-xs font-medium text-muted-foreground" htmlFor="city">
-                City
+                City <span className="font-normal opacity-70">(optional)</span>
               </label>
               <Input
                 id="city"
@@ -156,10 +158,9 @@ export default function LeadFinderPage() {
                 onChange={(e) => setCity(e.target.value)}
               />
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Search anywhere in the world — pick the country, then the city you&apos;re targeting. A city is
-                required: country-wide searches cover too large an area for the provider to return results.
-                Chain and franchise outlets are left out — their websites are decided at corporate, so there&apos;s
-                no local owner to pitch.
+                Search anywhere in the world. A city gives the most thorough results; leave it blank to search a
+                whole country and get a spread of businesses from across it. Chain and franchise outlets are left
+                out — their websites are decided at corporate, so there&apos;s no local owner to pitch.
               </p>
             </div>
 
@@ -248,12 +249,14 @@ export default function LeadFinderPage() {
               </div>
             </div>
 
-            <Button onClick={runSearch} disabled={searching || !city.trim()} className="w-full">
+            <Button onClick={runSearch} disabled={searching || (!city.trim() && !country)} className="w-full">
               {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
               {searching ? "Searching..." : "Find Leads"}
             </Button>
-            {!city.trim() && !searching && (
-              <p className="-mt-3 text-[11px] text-muted-foreground">Enter a city to run a search.</p>
+            {!city.trim() && !country && !searching && (
+              <p className="-mt-3 text-[11px] text-muted-foreground">
+                Pick a country, or enter a city, to run a search.
+              </p>
             )}
 
             {searching && (

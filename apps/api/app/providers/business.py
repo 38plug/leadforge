@@ -382,6 +382,15 @@ class OSMBusinessProvider(BusinessSearchProvider):
         return tuple(healthy + cooling)
 
     @classmethod
+    def _every_mirror_is_cooling_down(cls) -> bool:
+        """True when every mirror failed recently enough to still be in cooldown."""
+        now = time.monotonic()
+        return all(
+            now - cls._mirror_failed_at.get(url, 0.0) < MIRROR_COOLDOWN_SECONDS
+            for url in cls.OVERPASS_URLS
+        )
+
+    @classmethod
     def _record_mirror_failure(cls, url: str) -> None:
         cls._mirror_failed_at[url] = time.monotonic()
 
@@ -464,6 +473,23 @@ class OSMBusinessProvider(BusinessSearchProvider):
         )
 
     def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        if not filters.city:
+            # The bounding box is clamped to ~25km so Overpass can answer at
+            # all, which turns a country-wide search into "whatever happens to
+            # be near the country's centroid" — 3 rural results for Portugal in
+            # live testing. Returning nothing hands the search to a source that
+            # can cover a whole country instead of quietly answering the wrong
+            # question.
+            logger.info("Overpass skipped: no city given, area too large to scan")
+            return []
+
+        if self._every_mirror_is_cooling_down():
+            # Nothing is learned by spending the whole budget re-confirming an
+            # outage discovered moments ago. Handing over immediately turns a
+            # 90-second failure into a two-second answer from another source.
+            logger.info("Overpass skipped: every mirror failed recently")
+            return []
+
         place = self._geocode(filters.city, filters.country)
         if not place:
             logger.info("OSM search: could not geocode city=%r country=%r", filters.city, filters.country)
@@ -558,6 +584,271 @@ class OSMBusinessProvider(BusinessSearchProvider):
         return None
 
 
+# Nominatim understands "special phrases" - plain words like "restaurants" or
+# "hairdressers" that map onto OSM tags. Niches are translated to the phrase
+# Nominatim recognises; anything unmapped is passed through, since an unknown
+# word still matches against business names.
+_NOMINATIM_NICHE_PHRASES: dict[str, str] = {
+    "restaurant": "restaurants",
+    "cafe": "cafes",
+    "barber": "hairdressers",
+    "beauty salon": "beauty shops",
+    "dentist": "dentists",
+    "dental clinic": "dentists",
+    "medical clinic": "clinics",
+    "gym": "gyms",
+    "fitness": "gyms",
+    "hotel": "hotels",
+    "real estate": "estate agents",
+    "auto repair": "car repair shops",
+    "plumber": "plumbers",
+    "electrician": "electricians",
+    "law firm": "lawyers",
+    "accountant": "accountants",
+    "photographer": "photographers",
+    "construction": "builders",
+    "cleaning": "cleaners",
+    "retail": "shops",
+    "professional services": "offices",
+}
+
+# With no niche chosen there is no single phrase meaning "any business", so a
+# few broad ones are merged. Kept short: each is a separate request, and
+# Nominatim's usage policy asks for no more than one per second.
+# Every phrase here must be one Nominatim recognises as a category. A generic
+# word like "shops" is also matched against business names, which returned
+# companies literally called "Small-Shops" and "HB Shops" rather than shops.
+_NOMINATIM_ANY_BUSINESS_PHRASES = ("restaurants", "cafes", "hairdressers")
+
+
+class NominatimBusinessProvider(BusinessSearchProvider):
+    """
+    Business discovery through Nominatim's search API rather than Overpass.
+
+    Overpass is purpose-built for this kind of query and returns far more per
+    request, so it stays the primary source. But the volunteer Overpass
+    instances are frequently unresponsive - measured against the live service,
+    only 3 searches in 5 completed - and a lead finder that fails half the time
+    is not a product. Nominatim is a different service on better-provisioned
+    infrastructure, and it answers the same question in a few seconds.
+
+    Every search is confined to a bounding box. An unbounded text search for
+    "restaurants in Lisbon" returns Lisbon, Iowa: real businesses, wrong
+    continent, and nothing in the result to tell the user.
+    """
+
+    SEARCH_URL = "https://nominatim.openstreetmap.org/search"
+
+    # Nominatim caps a single response below this; asking for more simply
+    # returns everything it has.
+    MAX_RESULTS_PER_QUERY = 50
+
+    def __init__(self, contact: str | None = None, timeout_seconds: float = 30.0):
+        contact_suffix = f" ({contact})" if contact else ""
+        self.user_agent = f"LeadForge-App/0.1{contact_suffix}"
+        self.timeout_seconds = timeout_seconds
+        # Set while resolving the search area; results outside it are dropped.
+        self._expected_country_code: str | None = None
+
+    def _phrases_for_niche(self, niche: str | None) -> tuple[str, ...]:
+        if not niche:
+            return _NOMINATIM_ANY_BUSINESS_PHRASES
+        return (_NOMINATIM_NICHE_PHRASES.get(niche.strip().lower(), niche.strip()),)
+
+    def _place_bbox(self, city: str | None, country: str | None) -> GeocodeResult | None:
+        """Resolve the area to search.
+
+        Deliberately NOT clamped the way the Overpass path is: a country-wide
+        search is a legitimate request here, and Nominatim is looking places up
+        in an index rather than scanning an area.
+        """
+        query = ", ".join(part for part in [city, country] if part)
+        if not query:
+            return None
+
+        OSMBusinessProvider._respect_nominatim_rate_limit(self)
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
+                response = client.get(
+                    self.SEARCH_URL,
+                    # addressdetails so the country can be read back: a
+                    # country's bounding box overlaps its neighbours, and
+                    # results must not drift across the border.
+                    params={"q": query, "format": "json", "limit": 1, "addressdetails": 1},
+                )
+                response.raise_for_status()
+                results = response.json()
+        except Exception as exc:  # noqa: BLE001 - a geocode failure must not crash a search
+            logger.warning("Nominatim geocoding failed for %r: %s", query, exc)
+            return None
+        if not results:
+            return None
+
+        place = results[0]
+        south, north, west, east = (float(v) for v in place["boundingbox"])
+        canonical = str(place.get("display_name", "")).split(",")[0].strip() or None
+        self._expected_country_code = ((place.get("address") or {}).get("country_code") or "").lower() or None
+        return GeocodeResult(bbox=(south, west, north, east), canonical_city=canonical)
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        place = self._place_bbox(filters.city, filters.country)
+        if not place:
+            logger.info(
+                "Nominatim search: could not resolve city=%r country=%r",
+                filters.city,
+                filters.country,
+            )
+            return []
+
+        south, west, north, east = place.bbox
+        results: list[BusinessResult] = []
+        seen: set[str] = set()
+
+        for phrase in self._phrases_for_niche(filters.niche):
+            if len(results) >= filters.limit:
+                break
+            OSMBusinessProvider._respect_nominatim_rate_limit(self)
+            try:
+                with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
+                    response = client.get(
+                        self.SEARCH_URL,
+                        params={
+                            "q": phrase,
+                            "format": "jsonv2",
+                            "limit": self.MAX_RESULTS_PER_QUERY,
+                            "extratags": 1,
+                            "addressdetails": 1,
+                            # bounded=1 makes the viewbox a hard restriction
+                            # rather than a preference. Without it results leak
+                            # to a same-named place on another continent.
+                            "viewbox": f"{west},{north},{east},{south}",
+                            "bounded": 1,
+                        },
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+            except Exception as exc:  # noqa: BLE001 - try the next phrase
+                logger.info("Nominatim search failed for %r: %s", phrase, exc)
+                continue
+
+            for entry in payload:
+                if len(results) >= filters.limit:
+                    break
+                business = self._to_business(entry, filters, place)
+                if business and business.external_ref not in seen:
+                    seen.add(business.external_ref)
+                    results.append(business)
+
+        return results
+
+    def _to_business(
+        self, entry: dict, filters: BusinessSearchFilters, place: GeocodeResult
+    ) -> BusinessResult | None:
+        name = entry.get("name")
+        if not name:
+            return None
+
+        extratags = entry.get("extratags") or {}
+        if OSMBusinessProvider._is_chain(extratags):
+            return None
+
+        address = entry.get("address") or {}
+
+        # A bounding box is a rectangle, and a country is not: Germany's box
+        # covers parts of the Netherlands and France, which is how a search for
+        # German businesses returned shops in Blauwestad and Ribeauville.
+        entry_country = (address.get("country_code") or "").lower()
+        if self._expected_country_code and entry_country and entry_country != self._expected_country_code:
+            return None
+
+        street = " ".join(
+            part for part in (address.get("house_number"), address.get("road")) if part
+        ) or None
+        city = (
+            address.get("city")
+            or address.get("town")
+            or address.get("village")
+            or place.canonical_city
+            or filters.city
+            or ""
+        )
+
+        # Same identifier shape as the Overpass path, so a business found
+        # through either source is recognised as the same company instead of
+        # being saved twice.
+        external_ref = f"osm-{entry.get('osm_type')}-{entry.get('osm_id')}"
+
+        return BusinessResult(
+            external_ref=external_ref,
+            name=name,
+            niche=filters.niche or str(entry.get("type") or "Business").replace("_", " ").title(),
+            country=address.get("country") or filters.country or "",
+            city=city,
+            address=street,
+            maps_url=f"https://maps.google.com/?q={entry.get('lat')},{entry.get('lon')}",
+            # OSM carries neither ratings nor review counts, and inventing them
+            # would corrupt the opportunity score.
+            rating=None,
+            reviews_count=None,
+            phone=extratags.get("contact:phone") or extratags.get("phone"),
+            email=extratags.get("contact:email") or extratags.get("email"),
+            website=extratags.get("contact:website") or extratags.get("website"),
+            instagram=OSMBusinessProvider._extract_instagram_handle(extratags),
+            hours=extratags.get("opening_hours"),
+            description=None,
+        )
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        # Details are captured at search time and persisted; there is no cheap
+        # by-id lookup matching the search shape.
+        return None
+
+
+class FallbackBusinessProvider(BusinessSearchProvider):
+    """Tries each source in turn, so one service's outage is not the product's.
+
+    A source that raises, or returns nothing, hands over to the next. An error
+    surfaces only when every source has failed - and an empty result from all of
+    them genuinely means "nothing matched" rather than "the service was down".
+    """
+
+    def __init__(self, providers: list[BusinessSearchProvider]):
+        if not providers:
+            raise ValueError("FallbackBusinessProvider needs at least one provider")
+        self.providers = providers
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        last_error: ProviderError | None = None
+
+        for provider in self.providers:
+            name = type(provider).__name__
+            try:
+                results = provider.search(filters)
+            except ProviderError as exc:
+                logger.info("Business source %s unavailable: %s", name, exc.code)
+                last_error = exc
+                continue
+            except Exception as exc:  # noqa: BLE001 - one bad source must not end the search
+                logger.warning("Business source %s raised %s", name, type(exc).__name__)
+                continue
+
+            if results:
+                logger.info("Business source %s returned %d result(s)", name, len(results))
+                return results
+            logger.info("Business source %s returned nothing; trying the next", name)
+
+        if last_error is not None:
+            raise last_error
+        return []
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        for provider in self.providers:
+            details = provider.get_details(external_ref)
+            if details is not None:
+                return details
+        return None
+
+
 def get_business_provider(settings: Settings) -> BusinessSearchProvider:
     """Resolve the configured provider.
 
@@ -574,9 +865,25 @@ def get_business_provider(settings: Settings) -> BusinessSearchProvider:
             )
         return MockBusinessProvider()
     if settings.business_provider == "osm":
+        # Two independent OpenStreetMap services rather than one. Overpass
+        # leads because it returns far more per request, but its volunteer
+        # instances are down often enough that a lead search backed only by
+        # Overpass failed roughly half the time. Nominatim answers the same
+        # question from different infrastructure, so an Overpass outage costs
+        # coverage instead of costing the user their search.
+        return FallbackBusinessProvider(
+            [
+                OSMBusinessProvider(contact=settings.osm_contact),
+                NominatimBusinessProvider(contact=settings.osm_contact),
+            ]
+        )
+    if settings.business_provider == "overpass":
         return OSMBusinessProvider(contact=settings.osm_contact)
+    if settings.business_provider == "nominatim":
+        return NominatimBusinessProvider(contact=settings.osm_contact)
     raise NotImplementedError(
         f"Business provider '{settings.business_provider}' is not implemented. "
-        "Supported: 'osm' (free, worldwide, no API key). "
-        "Add new implementations in app/providers/business.py."
+        "Supported: 'osm' (free, worldwide, no API key; Overpass with a "
+        "Nominatim fallback), or either source alone as 'overpass' / "
+        "'nominatim'. Add new implementations in app/providers/business.py."
     )
