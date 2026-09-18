@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import { ToastProvider } from "@/components/ui/toast";
@@ -6,6 +6,12 @@ import { ToastProvider } from "@/components/ui/toast";
 export const metadata: Metadata = {
   title: "LeadForge — AI-Powered Client Acquisition",
   description: "Find businesses that are ready for a better website.",
+};
+
+// Tints the browser chrome on mobile to match the app's own ground, so the
+// status bar does not sit as a white band above a near-black interface.
+export const viewport: Viewport = {
+  themeColor: "#08090C",
 };
 
 export default function RootLayout({

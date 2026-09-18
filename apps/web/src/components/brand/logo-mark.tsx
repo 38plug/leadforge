@@ -5,32 +5,39 @@ import { useId } from "react";
 interface LogoMarkProps {
   size?: number;
   className?: string;
-}
-
-const R_MAIN = 27;
-const R_ACCENT = 12;
-const CIRC_MAIN = 2 * Math.PI * R_MAIN;
-const CIRC_ACCENT = 2 * Math.PI * R_ACCENT;
-
-/** visible/gap arc lengths for a ring open on ~300° of its circumference */
-function ringDash(circumference: number, visibleDeg: number) {
-  const visible = circumference * (visibleDeg / 360);
-  const gap = circumference - visible;
-  return `${visible.toFixed(1)} ${gap.toFixed(1)}`;
+  /** Draw the dark rounded tile behind the mark, as in the app icon. */
+  tile?: boolean;
 }
 
 /**
- * The LeadForge glow mark — two glossy, tube-like rings (a large ring with
- * a smaller orbiting accent, echoing a forge spark caught mid-arc) rendered
- * with layered gradients, a specular highlight streak, and a soft blurred
- * bloom behind the crisp shape, evoking brushed glass/chrome under a green
- * light rather than a flat app icon.
+ * The LeadForge mark: an S built from two opposing arcs, drawn as glowing
+ * tubes.
+ *
+ * Each arc is stroked three times - a blurred copy for the bloom, the violet
+ * body, then a short lime highlight where the light catches. That order is
+ * what makes it read as a lit tube rather than a coloured line, and it is why
+ * the highlight is a separate short arc instead of a gradient stop.
+ *
+ * Drawn rather than bitmapped so it stays sharp from a 16px favicon to a
+ * marketing header, and so the glow can follow the accent token.
  */
-export function LogoMark({ size = 30, className }: LogoMarkProps) {
+export function LogoMark({ size = 30, className, tile = false }: LogoMarkProps) {
   const uid = useId().replace(/:/g, "");
-  const tube = `tube-${uid}`;
-  const glow = `glow-${uid}`;
-  const blur = `blur-${uid}`;
+  const body = `body-${uid}`;
+  const bloom = `bloom-${uid}`;
+  const soft = `soft-${uid}`;
+  const tileFill = `tile-${uid}`;
+
+  // Two circles of equal radius, stacked so their arcs meet in the middle.
+  const r = 19;
+  const topCy = 34;
+  const bottomCy = 66;
+  const circumference = 2 * Math.PI * r;
+  // ~68% of the ring is drawn; the gap is what opens each C.
+  const visible = circumference * 0.68;
+  const dash = `${visible.toFixed(1)} ${(circumference - visible).toFixed(1)}`;
+  // A short bright segment, positioned where the light would catch.
+  const highlight = `${(circumference * 0.17).toFixed(1)} ${(circumference * 0.83).toFixed(1)}`;
 
   return (
     <svg
@@ -43,87 +50,99 @@ export function LogoMark({ size = 30, className }: LogoMarkProps) {
       aria-label="LeadForge"
     >
       <defs>
-        <linearGradient id={tube} x1="18" y1="12" x2="82" y2="88" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#D4FFB0" />
-          <stop offset="28%" stopColor="hsl(var(--glow-strong))" />
-          <stop offset="65%" stopColor="hsl(150 70% 28%)" />
-          <stop offset="100%" stopColor="hsl(150 60% 10%)" />
+        <linearGradient id={body} x1="20" y1="14" x2="80" y2="86" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#C4B5FD" />
+          <stop offset="35%" stopColor="#A78BFA" />
+          <stop offset="70%" stopColor="#8B5CF6" />
+          <stop offset="100%" stopColor="#7C3AED" />
         </linearGradient>
-        <radialGradient id={glow} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="hsl(var(--glow-strong))" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="hsl(var(--glow-strong))" stopOpacity="0" />
+        <radialGradient id={bloom} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0" />
         </radialGradient>
-        <filter id={blur} x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="4.5" />
+        <filter id={soft} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="4" />
         </filter>
+        <linearGradient id={tileFill} x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#12141B" />
+          <stop offset="100%" stopColor="#0B0C11" />
+        </linearGradient>
       </defs>
 
-      {/* ambient bloom */}
-      <circle cx="50" cy="46" r="36" fill={`url(#${glow})`} filter={`url(#${blur})`} opacity="0.5" />
+      {tile && <rect x="0" y="0" width="100" height="100" rx="26" fill={`url(#${tileFill})`} />}
 
-      {/* main ring — blurred bloom copy, then crisp tube */}
-      <circle
-        cx="50"
-        cy="40"
-        r={R_MAIN}
-        stroke="hsl(var(--glow-strong))"
-        strokeWidth="12"
-        strokeDasharray={ringDash(CIRC_MAIN, 300)}
-        strokeDashoffset="40"
-        strokeLinecap="round"
-        transform="rotate(20 50 40)"
-        filter={`url(#${blur})`}
-        opacity="0.55"
-      />
-      <circle
-        cx="50"
-        cy="40"
-        r={R_MAIN}
-        stroke={`url(#${tube})`}
-        strokeWidth="12"
-        strokeDasharray={ringDash(CIRC_MAIN, 300)}
-        strokeDashoffset="40"
-        strokeLinecap="round"
-        transform="rotate(20 50 40)"
-      />
-      {/* specular highlight streak */}
-      <circle
-        cx="50"
-        cy="40"
-        r={R_MAIN}
-        stroke="#EFFFEA"
-        strokeWidth="3"
-        strokeDasharray={ringDash(CIRC_MAIN, 32)}
-        strokeDashoffset="8"
-        strokeLinecap="round"
-        transform="rotate(20 50 40)"
-        opacity="0.9"
-      />
+      {/* Ambient bloom, sitting behind everything. */}
+      <circle cx="50" cy="50" r="30" fill={`url(#${bloom})`} filter={`url(#${soft})`} />
 
-      {/* accent ring (forward-kicked spark, echoing the L's forward motion) */}
-      <circle
-        cx="34"
-        cy="71"
-        r={R_ACCENT}
-        stroke={`url(#${tube})`}
-        strokeWidth="8"
-        strokeDasharray={ringDash(CIRC_ACCENT, 300)}
-        strokeDashoffset="8"
-        strokeLinecap="round"
-        transform="rotate(-25 34 71)"
-      />
-      <circle
-        cx="34"
-        cy="71"
-        r={R_ACCENT}
-        stroke="#EFFFEA"
-        strokeWidth="2"
-        strokeDasharray={ringDash(CIRC_ACCENT, 28)}
-        strokeDashoffset="2"
-        strokeLinecap="round"
-        transform="rotate(-25 34 71)"
-        opacity="0.9"
-      />
+      {/* --- upper arc, opening toward the lower right --- */}
+      <g transform="rotate(-24 50 34)">
+        <circle
+          cx="50"
+          cy={topCy}
+          r={r}
+          stroke="#8B5CF6"
+          strokeWidth="11"
+          strokeDasharray={dash}
+          strokeLinecap="round"
+          filter={`url(#${soft})`}
+          opacity="0.75"
+        />
+        <circle
+          cx="50"
+          cy={topCy}
+          r={r}
+          stroke={`url(#${body})`}
+          strokeWidth="10"
+          strokeDasharray={dash}
+          strokeLinecap="round"
+        />
+        <circle
+          cx="50"
+          cy={topCy}
+          r={r}
+          stroke="#D9F99D"
+          strokeWidth="3.5"
+          strokeDasharray={highlight}
+          strokeDashoffset={-circumference * 0.08}
+          strokeLinecap="round"
+          opacity="0.95"
+        />
+      </g>
+
+      {/* --- lower arc, opening toward the upper left --- */}
+      <g transform="rotate(156 50 66)">
+        <circle
+          cx="50"
+          cy={bottomCy}
+          r={r}
+          stroke="#8B5CF6"
+          strokeWidth="11"
+          strokeDasharray={dash}
+          strokeLinecap="round"
+          filter={`url(#${soft})`}
+          opacity="0.75"
+        />
+        <circle
+          cx="50"
+          cy={bottomCy}
+          r={r}
+          stroke={`url(#${body})`}
+          strokeWidth="10"
+          strokeDasharray={dash}
+          strokeLinecap="round"
+        />
+        <circle
+          cx="50"
+          cy={bottomCy}
+          r={r}
+          stroke="#D9F99D"
+          strokeWidth="3.5"
+          strokeDasharray={highlight}
+          strokeDashoffset={-circumference * 0.08}
+          strokeLinecap="round"
+          opacity="0.95"
+        />
+      </g>
     </svg>
   );
 }
