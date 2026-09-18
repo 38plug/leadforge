@@ -9,6 +9,8 @@ from app.core.startup_checks import verify_production_safety
 from app.db.session import Base, engine
 from app.providers.errors import ProviderError
 from app.routers import (
+    account,
+    admin,
     ai,
     analytics,
     auth,
@@ -69,6 +71,8 @@ app.include_router(workspace.router)
 app.include_router(leads.router)
 app.include_router(companies.router)
 app.include_router(analytics.router)
+app.include_router(account.router)
+app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(crm.router)
 app.include_router(search.router)

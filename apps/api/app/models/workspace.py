@@ -20,6 +20,12 @@ class User(Base):
     hashed_password: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
 
+    # Platform administrator, distinct from WorkspaceRole.ADMIN below. That
+    # role governs one workspace; this governs the installation - every
+    # account, every workspace, billing. It is deliberately not settable
+    # through registration or any workspace-scoped endpoint.
+    is_superuser: Mapped[bool] = mapped_column(default=False, nullable=False)
+
     memberships: Mapped[list["WorkspaceMember"]] = relationship(back_populates="user")
 
 
