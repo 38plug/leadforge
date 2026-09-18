@@ -147,6 +147,10 @@ accounts. Each piece is on a free tier that is permanent rather than a trial:
    - `CORS_ORIGINS` — `["https://your-app.vercel.app"]` (fill in after step 3,
      then redeploy)
    - `OSM_CONTACT` — your email, per OpenStreetMap's usage policy
+
+   Render **Secret Files** work too, and the filename does not matter: every
+   file mounted in `/etc/secrets` is read as an env file. Paste the same
+   `KEY=value` lines into one and the API picks them up.
 3. **Frontend (Vercel)** — import the repo with **Root Directory `apps/web`**.
    Set `NEXT_PUBLIC_API_URL` to the Render URL. Next.js inlines `NEXT_PUBLIC_*`
    at build time, so changing it later needs a rebuild, not just a restart.

@@ -1,3 +1,4 @@
+import pathlib
 """A production deployment on development defaults must not start."""
 
 import pytest
@@ -80,3 +81,45 @@ def test_diagnostics_never_print_secret_values(tmp_path, monkeypatch):
     assert "JWT_SECRET" in report, "key names are useful and expected"
     assert "super-secret-value" not in report
     assert "hunter2" not in report
+
+
+def test_secret_files_are_read_whatever_they_are_named(tmp_path, monkeypatch):
+    """Render mounts Secret Files under the name the user chose. A real deploy
+    failed five times because the app only looked for '.env' while the mounted
+    file was called 'LeadForgeEnv'."""
+    from app.core import config as config_module
+
+    secrets_dir = tmp_path / "secrets"
+    secrets_dir.mkdir()
+    (secrets_dir / "LeadForgeEnv").write_text(
+        "JWT_SECRET=" + REAL_SECRET + "\nDATABASE_URL=" + REAL_DB + "\n", encoding="utf-8"
+    )
+    # Kubernetes' atomic-writer artifacts, present in the real mount.
+    (secrets_dir / "..data").write_text("not config", encoding="utf-8")
+    (secrets_dir / "..2026_09_18_09_03_45.2190926750").write_text("not config", encoding="utf-8")
+
+    monkeypatch.setattr(config_module, "RENDER_SECRETS_DIR", secrets_dir)
+    # conftest exports DATABASE_URL for the test database, and a real
+    # environment variable outranks any env file — which is the correct
+    # precedence, just not what this test is about.
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    discovered = config_module._secret_env_files()
+    assert [pathlib.Path(p).name for p in discovered] == ["LeadForgeEnv"], (
+        "only real secret files are config; the '..' entries are mount internals"
+    )
+
+    loaded = Settings(_env_file=discovered)
+    assert loaded.jwt_secret == REAL_SECRET
+    assert loaded.database_url == REAL_DB
+    verify_production_safety(
+        Settings(_env_file=discovered, environment="production")
+    )
+
+
+def test_missing_secrets_directory_is_not_an_error(tmp_path, monkeypatch):
+    """Locally /etc/secrets does not exist, and that must not break startup."""
+    from app.core import config as config_module
+
+    monkeypatch.setattr(config_module, "RENDER_SECRETS_DIR", tmp_path / "nope")
+    assert config_module._secret_env_files() == ()

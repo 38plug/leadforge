@@ -1,7 +1,32 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Render mounts Secret Files here under whatever name they were given, and the
+# name is not something the application should have to know in advance. Every
+# file in the directory is treated as an env file, so adding a secret file is
+# all a deployment has to do.
+RENDER_SECRETS_DIR = Path("/etc/secrets")
+
+
+def _secret_env_files() -> tuple[str, ...]:
+    """Every readable secret file Render has mounted, oldest name first."""
+    try:
+        entries = sorted(RENDER_SECRETS_DIR.iterdir())
+    except OSError:
+        # The directory only exists on Render; locally there is nothing to read.
+        return ()
+
+    return tuple(
+        str(entry)
+        for entry in entries
+        # Kubernetes atomically swaps mounted secrets using "..data" and
+        # "..<timestamp>" helper entries; only the real files are config.
+        if entry.is_file() and not entry.name.startswith("..")
+    )
 
 
 class Settings(BaseSettings):
@@ -18,8 +43,11 @@ class Settings(BaseSettings):
     # Listing it last means it wins over a local .env, so a deployed secret is
     # never shadowed by a file that happened to ship in the image. Both are
     # optional: a missing env file is not an error.
+    # A local .env first for development, then anything mounted as a Render
+    # Secret File. Later entries win, so a deployed secret is never shadowed by
+    # a file that happened to ship in the image. All of them are optional.
     model_config = SettingsConfigDict(
-        env_file=(".env", "/etc/secrets/.env"),
+        env_file=(".env", *_secret_env_files()),
         extra="ignore",
     )
 
