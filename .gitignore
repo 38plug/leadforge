@@ -29,3 +29,6 @@ Thumbs.db
 
 # Render API key (local only, never committed)
 .render-key
+
+.vercel
+.env*

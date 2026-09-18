@@ -75,7 +75,16 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_use_tls: bool = True
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # Browsers block a cross-origin call unless the API names the calling
+    # origin here, so the deployed frontend's own domains are defaults rather
+    # than something a deployment has to remember to set. CORS_ORIGINS
+    # overrides this entirely — set it to just your domain(s) if you want the
+    # local development origin closed off in production.
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "https://leadforge-wheat-seven.vercel.app",
+        "https://leadforge-leadforge3.vercel.app",
+    ]
 
     @field_validator("database_url")
     @classmethod

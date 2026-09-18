@@ -44,7 +44,10 @@ services:
         sync: false
       - key: SECRET_ENCRYPTION_KEY
         sync: false
+      # Not a secret — these are public domain names, and leaving it as a
+      # prompt meant a missed answer silently fell back to localhost-only,
+      # which rejects the real frontend.
       - key: CORS_ORIGINS
-        sync: false
+        value: '["https://leadforge-wheat-seven.vercel.app","https://leadforge-leadforge3.vercel.app"]'
       - key: OSM_CONTACT
         sync: false
