@@ -5,6 +5,11 @@
 #     roughly a minute to wake. The first search after an idle period pays that
 #     on top of the OSM query itself.
 #   - Each workspace gets 750 free instance-hours per calendar month.
+#   - Region is frankfurt while the Neon database is in aws-us-east-2, so
+#     every query crosses the Atlantic (~100-120ms from a Frankfurt DC).
+#     A search writes ~4 rows per business, so expect roughly 10s of added
+#     latency on a 25-result search. Render cannot move a service between
+#     regions, so changing this means deleting and recreating the service.
 #   - The database is deliberately NOT defined here. Render's own free Postgres
 #     expires 30 days after creation; this deploy uses Neon's free tier instead,
 #     which is permanent. DATABASE_URL is supplied as a secret at setup.
@@ -17,7 +22,7 @@ services:
     name: leadforge-api
     runtime: python
     plan: free
-    region: ohio
+    region: frankfurt
     rootDir: apps/api
     buildCommand: pip install -r requirements.txt -r requirements-postgres.txt
     # Migrations run on every boot: alembic upgrade head is idempotent, so this

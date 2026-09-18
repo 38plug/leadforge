@@ -26,3 +26,6 @@ Thumbs.db
 # Logs
 *.log
 .neon
+
+# Render API key (local only, never committed)
+.render-key
