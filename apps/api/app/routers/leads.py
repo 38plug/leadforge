@@ -265,12 +265,13 @@ def search_leads(
         score_result = scorer.score(
             ScoringInput(
                 website_status=website_check.status,
-                rating=biz.rating,
-                reviews_count=biz.reviews_count,
                 has_active_social=bool(biz.instagram),
-                is_established=is_established,
                 has_phone=bool(biz.phone),
                 has_email=bool(biz.email),
+                # A listing carrying these is a real, maintained business
+                # rather than a stale pin on a map.
+                has_address=bool(biz.address),
+                has_hours=bool(biz.hours),
             )
         )
         if score_result.score < filters.min_score:
