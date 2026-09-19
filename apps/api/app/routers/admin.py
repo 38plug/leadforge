@@ -71,6 +71,7 @@ def config_status(
     is safe to read aloud: it reports presence, never contents.
     """
     from app.core.config import _secret_env_files
+    from app.providers.email import smtp_is_configured
 
     def state(value: object) -> str:
         return "set" if value else "MISSING"
@@ -92,7 +93,12 @@ def config_status(
             "STRIPE_PRICE_PRO": state(settings.stripe_price_pro),
             "STRIPE_PRICE_AGENCY": state(settings.stripe_price_agency),
             "AI_PROVIDER_API_KEY": state(settings.ai_provider_api_key),
-            "SMTP_HOST": state(settings.smtp_host),
+            # Reported as one line because a host without credentials sends
+            # nothing: showing SMTP_HOST alone as "set" implied email worked
+            # when it did not.
+            "SMTP (host, username, password)": (
+                "set" if smtp_is_configured(settings) else "INCOMPLETE"
+            ),
             "OSM_CONTACT": state(settings.osm_contact),
         },
     }

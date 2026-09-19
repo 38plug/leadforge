@@ -38,7 +38,7 @@ const GROUPS: { title: string; keys: string[]; note: string }[] = [
   },
   {
     title: "Optional",
-    keys: ["AI_PROVIDER_API_KEY", "SMTP_HOST", "OSM_CONTACT"],
+    keys: ["AI_PROVIDER_API_KEY", "SMTP (host, username, password)", "OSM_CONTACT"],
     note: "Each one missing disables a feature rather than breaking the product: AI analysis falls back to rules, and password-reset email cannot be delivered.",
   },
 ];
