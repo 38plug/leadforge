@@ -86,19 +86,29 @@ class LeadReveal(Base):
     """Records that a workspace has unlocked one lead's contact details.
 
     This is the unit the plan is metered in. It exists as its own table rather
-    than as a UsageRecord row so that (workspace, lead) can be unique: opening
-    the same lead a second time must not consume quota again, or the counter
-    would measure clicking rather than leads and punish ordinary use.
+    than as a UsageRecord row so that (workspace, lead, period) can be unique:
+    reopening the same lead within the week must not consume quota again, or
+    the counter would measure clicking rather than leads and punish ordinary
+    use. The period is part of the key because an unlock covers the week it
+    was bought in, so the same lead can legitimately be unlocked again later.
     """
 
     __tablename__ = "lead_reveals"
-    __table_args__ = (UniqueConstraint("workspace_id", "lead_id", name="uq_reveal_workspace_lead"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "lead_id", "period", name="uq_reveal_workspace_lead_period"),
+    )
 
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True, nullable=False)
     lead_id: Mapped[str] = mapped_column(ForeignKey("leads.id"), index=True, nullable=False)
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
-    # "YYYY-MM": quota is a monthly allowance, so usage is counted per period.
+    # ISO week ("2026-W38"): the allowance refills weekly, so usage is counted
+    # per period and a new week simply finds no rows.
     period: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+
+    # True when this unlock was paid for from a purchased credit pack rather
+    # than the plan's included allowance. Recorded rather than counted in a
+    # running total, so the balance is always derivable and cannot drift.
+    from_credit: Mapped[bool] = mapped_column(default=False, nullable=False)
 
 
 class AuthToken(Base):
@@ -119,3 +129,28 @@ class AuthToken(Base):
     token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
     expires_at: Mapped[str] = mapped_column(String(64), nullable=False)
     used_at: Mapped[str | None] = mapped_column(String(64))
+
+
+class CreditPurchase(Base):
+    """A one-off purchase of extra lead unlocks.
+
+    Separate from the subscription: someone on the free plan who needs more
+    this week should be able to buy a pack without committing to a monthly
+    bill, and someone on a paid plan should be able to top up a busy week.
+
+    Credits do not expire with the weekly cycle. They were bought outright
+    rather than included, so they sit behind the plan allowance and are only
+    drawn on once the included leads are gone.
+
+    The Stripe session id is unique, which is what makes payment processing
+    idempotent: a webhook delivered twice cannot grant the credits twice.
+    """
+
+    __tablename__ = "credit_purchases"
+
+    workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True, nullable=False)
+    credits: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), default="usd", nullable=False)
+    stripe_session_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    purchased_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)

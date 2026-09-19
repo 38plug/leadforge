@@ -69,6 +69,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // plan - the local map is only a fallback while usage is still loading.
   const limit = usage?.lead_reveals_limit ?? PLAN_LIMITS[workspace?.plan ?? "FREE"] ?? 50;
   const used = usage?.lead_reveals ?? 0;
+  // Unlocks bought outright. Shown beside the bar rather than folded into it,
+  // because they sit behind the weekly allowance rather than extending it: a
+  // full bar with credits left still means "this week's included leads are
+  // gone", which is a different thing from "you cannot open another lead".
+  const credits = usage?.credit_balance ?? 0;
   const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 
   return (
@@ -142,7 +147,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             href="/settings?tab=billing"
             onClick={onNavigate}
-            aria-label={`Workspace usage: ${used} of ${limit} leads unlocked. Open billing.`}
+            aria-label={
+              `Workspace usage: ${used} of ${limit} leads unlocked this week` +
+              (credits > 0 ? `, plus ${credits} bought` : "") +
+              ". Open billing."
+            }
             className="surface surface-interactive block rounded-lg p-3"
           >
             <div className="flex items-center justify-between gap-2">
@@ -168,7 +177,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <div className="h-full rounded-full bg-primary/80" style={{ width: `${pct}%` }} />
               </div>
-              <p className="pt-0.5 text-2xs text-subtle-foreground">View plan and usage</p>
+              <p className="pt-0.5 text-2xs text-subtle-foreground">
+                {credits > 0
+                  ? `+${credits.toLocaleString()} bought - view plan and usage`
+                  : "View plan and usage"}
+              </p>
             </div>
           </Link>
         </div>

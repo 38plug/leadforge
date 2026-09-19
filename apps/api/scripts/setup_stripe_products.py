@@ -12,6 +12,10 @@ subscribed to an old one that nobody is tracking.
 
 The amounts mirror the plans already shown in Settings. They live in Stripe
 once created, so changing a price later is a Dashboard action, not a deploy.
+
+Descriptions are only written when a product is first created. Editing one
+here does not rewrite a product that already exists in Stripe - that is a
+Dashboard edit.
 """
 
 import argparse
@@ -27,25 +31,40 @@ PLANS = [
     {
         "plan": "STARTER",
         "name": "LeadForge Starter",
-        "description": "500 lead unlocks a month, 2 seats.",
+        "description": "500 lead unlocks a week, 2 seats.",
         "amount_cents": 2900,
         "env_var": "STRIPE_PRICE_STARTER",
     },
     {
         "plan": "PRO",
         "name": "LeadForge Pro",
-        "description": "2,000 lead unlocks a month, 5 seats.",
+        "description": "2,000 lead unlocks a week, 5 seats.",
         "amount_cents": 7900,
         "env_var": "STRIPE_PRICE_PRO",
     },
     {
         "plan": "AGENCY",
         "name": "LeadForge Agency",
-        "description": "10,000 lead unlocks a month, 15 seats.",
+        "description": "10,000 lead unlocks a week, 15 seats.",
         "amount_cents": 19900,
         "env_var": "STRIPE_PRICE_AGENCY",
     },
 ]
+
+# The one-off pack. A one-time price rather than a subscription: it is bought
+# when someone needs more this week, on any plan including FREE, and billing
+# it monthly would charge for something nobody agreed to.
+#
+# The number of unlocks granted is decided by the application (CREDIT_PACK_SIZE
+# in the API settings), not read back from this product, so the two must be
+# kept in step. That is why the size appears in the description and metadata.
+CREDIT_PACK = {
+    "name": "LeadForge Lead Pack",
+    "description": "200 extra lead unlocks. One-off purchase, does not expire.",
+    "amount_cents": 2000,
+    "credits": 200,
+    "env_var": "STRIPE_PRICE_CREDIT_PACK",
+}
 
 CURRENCY = "usd"
 
@@ -145,6 +164,50 @@ def main() -> None:
         )
         print(f"  {spec['plan']:8} created        {price.id}")
         results.append((spec["env_var"], price.id))
+
+    # --- the one-off pack ------------------------------------------------
+    # A one-time price, so the "same price" test is the absence of `recurring`
+    # rather than a matching interval.
+    pack_product = existing_products.get(CREDIT_PACK["name"])
+    pack_match = next(
+        (
+            price
+            for price in existing_prices
+            if pack_product
+            and price.product == pack_product.id
+            and price.unit_amount == CREDIT_PACK["amount_cents"]
+            and price.currency == CURRENCY
+            and not price.recurring
+        ),
+        None,
+    )
+
+    if pack_match:
+        print(f"  {'PACK':8} already exists  {pack_match.id}")
+        results.append((CREDIT_PACK["env_var"], pack_match.id))
+    elif not args.apply:
+        amount = CREDIT_PACK["amount_cents"] / 100
+        print(f"  {'PACK':8} would create   ${amount:.2f} one-off  {CREDIT_PACK['name']}")
+    else:
+        if not pack_product:
+            pack_product = client.v1.products.create(
+                params={
+                    "name": CREDIT_PACK["name"],
+                    "description": CREDIT_PACK["description"],
+                    "tax_code": SAAS_BUSINESS_TAX_CODE,
+                    "metadata": {"leadforge_credits": str(CREDIT_PACK["credits"])},
+                }
+            )
+        pack_price = client.v1.prices.create(
+            params={
+                "product": pack_product.id,
+                "unit_amount": CREDIT_PACK["amount_cents"],
+                "currency": CURRENCY,
+                "metadata": {"leadforge_credits": str(CREDIT_PACK["credits"])},
+            }
+        )
+        print(f"  {'PACK':8} created        {pack_price.id}")
+        results.append((CREDIT_PACK["env_var"], pack_price.id))
 
     if not args.apply:
         print("\nDry run. Re-run with --apply to create them.")

@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   CreditCard,
   CheckCircle2,
+  ShoppingCart,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,13 @@ interface BillingState {
   current_period_end: string | null;
   has_billing_account: boolean;
   plans: PlanOption[];
+  credit_pack?: {
+    credits: number;
+    purchasable: boolean;
+    /** Read from Stripe. Null when it could not be read - show nothing then. */
+    amount_cents: number | null;
+    currency: string | null;
+  };
 }
 
 /** Presentation for each plan. Limits and purchasability come from the API. */
@@ -43,6 +51,20 @@ const PLAN_COPY: Record<string, { name: string; price: string; blurb: string; se
   PRO: { name: "Pro", price: "$79", blurb: "For a busy freelancer", seats: "5 seats" },
   AGENCY: { name: "Agency", price: "$199", blurb: "For a small team", seats: "15 seats" },
 };
+
+/** Renders a Stripe amount in its own currency, rather than assuming dollars. */
+function formatPrice(cents: number, currency: string | null): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: (currency ?? "usd").toUpperCase(),
+      maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    }).format(cents / 100);
+  } catch {
+    // An unrecognised currency code should not blank the page.
+    return `${(cents / 100).toFixed(2)} ${(currency ?? "").toUpperCase()}`.trim();
+  }
+}
 
 /**
  * Plans, and the buttons that actually charge for them.
@@ -58,6 +80,7 @@ export function BillingPanel() {
   const searchParams = useSearchParams();
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
+  const [buyingCredits, setBuyingCredits] = useState(false);
 
   const { data: billing, loading, error, refetch } = useApi<BillingState>("/api/billing/plans");
   const { data: usage, refetch: refetchUsage } = useApi<ApiUsage>("/api/workspace/usage");
@@ -68,7 +91,7 @@ export function BillingPanel() {
   // granted by webhook, which can land a moment after the redirect. Refetching
   // shortly after arrival avoids showing a stale plan to someone who just paid.
   useEffect(() => {
-    if (checkoutResult !== "success") return;
+    if (checkoutResult !== "success" && checkoutResult !== "credits") return;
     const timer = setTimeout(() => {
       refetch();
       refetchUsage();
@@ -83,6 +106,21 @@ export function BillingPanel() {
       window.location.href = url;
     } catch (err) {
       setPendingPlan(null);
+      toast({
+        title: "Couldn't start checkout",
+        description: err instanceof ApiError ? err.message : "Please try again.",
+        variant: "error",
+      });
+    }
+  }
+
+  async function buyCredits() {
+    setBuyingCredits(true);
+    try {
+      const { url } = await api.post<{ url: string }>("/api/billing/credits/checkout");
+      window.location.href = url;
+    } catch (err) {
+      setBuyingCredits(false);
       toast({
         title: "Couldn't start checkout",
         description: err instanceof ApiError ? err.message : "Please try again.",
@@ -122,6 +160,15 @@ export function BillingPanel() {
 
   return (
     <div className="flex flex-col gap-4">
+      {checkoutResult === "credits" && (
+        <div className="animate-rise-in flex items-start gap-3 rounded-lg border border-success/25 bg-success/[0.08] p-4">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+          <p className="text-[13px] leading-relaxed text-muted-foreground">
+            Payment received — thank you. Your extra leads appear here within a few seconds of
+            Stripe confirming it.
+          </p>
+        </div>
+      )}
       {checkoutResult === "success" && (
         <div className="animate-rise-in flex items-start gap-3 rounded-lg border border-success/25 bg-success/[0.08] p-4">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
@@ -201,10 +248,17 @@ export function BillingPanel() {
                   }}
                 />
               </div>
+              {(usage.credit_balance ?? 0) > 0 && (
+                <p className="text-2xs text-muted-foreground">
+                  Plus <span className="numeric">{usage.credit_balance}</span> leads you bought
+                  outright. These are used only once the weekly allowance is gone, and they do not
+                  expire.
+                </p>
+              )}
               {usage.quota_exhausted && (
                 <p className="text-2xs text-warning">
-                  You have used this week&apos;s allowance. Upgrade for a larger one, or wait for
-                  Monday.
+                  You have used this week&apos;s allowance. Buy a pack of extra leads, upgrade for
+                  a larger weekly allowance, or wait for Monday.
                 </p>
               )}
             </>
@@ -216,6 +270,57 @@ export function BillingPanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* ------------------------------------------------- extra leads, one-off */}
+      {billing.credit_pack && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>Need more this week?</CardTitle>
+            <CardDescription>
+              A one-off pack of extra leads, on any plan. No subscription, and they do not expire
+              when the week rolls over.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-end justify-between gap-3 pt-0">
+            <div>
+              <p className="numeric text-2xl font-semibold">
+                {billing.credit_pack.amount_cents !== null
+                  ? formatPrice(billing.credit_pack.amount_cents, billing.credit_pack.currency)
+                  : billing.credit_pack.credits.toLocaleString()}
+                <span className="ml-1.5 text-sm font-normal text-subtle-foreground">
+                  for {billing.credit_pack.credits.toLocaleString()} leads
+                </span>
+              </p>
+              <p className="mt-0.5 text-2xs text-subtle-foreground">
+                {billing.credit_pack.amount_cents !== null
+                  ? "Charged once, not a subscription."
+                  : "Charged once. The price is confirmed on Stripe's checkout page."}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={buyCredits}
+              disabled={!billing.credit_pack.purchasable || buyingCredits}
+              title={
+                !billing.credit_pack.purchasable
+                  ? "Packs are not available for purchase yet"
+                  : undefined
+              }
+            >
+              {buyingCredits ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ShoppingCart className="h-3.5 w-3.5" />
+              )}
+              {buyingCredits
+                ? "Opening Stripe..."
+                : billing.credit_pack.purchasable
+                  ? "Buy a pack"
+                  : "Unavailable"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ----------------------------------------------------------- the plans */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

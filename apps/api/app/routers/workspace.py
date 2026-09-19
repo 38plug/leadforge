@@ -135,6 +135,8 @@ def get_usage(db: Session = Depends(get_db), workspace: Workspace = Depends(get_
         lead_reveals=int(quota["used"]),
         lead_reveals_limit=int(quota["limit"]),
         lead_reveals_remaining=int(quota["remaining"]),
+        lead_reveals_included_remaining=int(quota["included_remaining"]),
+        credit_balance=int(quota["credit_balance"]),
         quota_exhausted=bool(quota["exhausted"]),
         lead_searches=lead_searches,
         ai_analyses=ai_analyses,

@@ -41,7 +41,40 @@ def list_plans(
         "current_period_end": subscription.current_period_end if subscription else None,
         "has_billing_account": bool(subscription and subscription.external_customer_id),
         "plans": billing.purchasable_plans(settings),
+        "credit_pack": billing.credit_pack_offer(settings),
     }
+
+
+@router.post("/credits/checkout")
+def start_credit_checkout(
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+    workspace: Workspace = Depends(get_current_workspace),
+    user: User = Depends(get_current_user),
+):
+    """Buy a one-off pack of lead unlocks. Available on every plan."""
+    app_url = (settings.cors_origins or ["http://localhost:3000"])[0].rstrip("/")
+    try:
+        url = billing.create_credit_checkout_session(
+            db,
+            settings,
+            workspace,
+            user_id=user.id,
+            email=user.email,
+            success_url=f"{app_url}/settings?tab=billing&checkout=credits",
+            cancel_url=f"{app_url}/settings?tab=billing&checkout=cancelled",
+        )
+    except billing.BillingNotConfigured as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
+    except stripe.StripeError as exc:
+        logger.warning("Stripe refused a credit checkout session: %s", exc)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Stripe could not start this checkout. Please try again.",
+        ) from exc
+
+    db.commit()
+    return {"url": url}
 
 
 @router.post("/checkout")
@@ -160,7 +193,13 @@ async def stripe_webhook(
         # access that may never be funded.
         if obj.get("payment_status") != "paid":
             return {"received": True, "handled": False}
-        _sync_from_stripe(db, settings, obj.get("subscription"), workspace_id)
+
+        if obj.get("mode") == "payment":
+            # A one-off pack rather than a plan change. Granting is idempotent
+            # on the session id, so Stripe's retries cannot double the credits.
+            billing.grant_credits_from_session(db, obj)
+        else:
+            _sync_from_stripe(db, settings, obj.get("subscription"), workspace_id)
 
     elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
         billing.apply_subscription_state(

@@ -31,7 +31,13 @@ class UsageOut(BaseModel):
     # here rather than hard-coding a copy, so the two cannot disagree.
     lead_reveals: int = 0
     lead_reveals_limit: int = 0
+    # Everything still available: what is left of the weekly allowance plus
+    # any packs bought outright. Reported as one number because that is the
+    # question the customer is asking - how many more can I open.
     lead_reveals_remaining: int = 0
+    lead_reveals_included_remaining: int = 0
+    # Purchased unlocks. These do not expire when the week rolls over.
+    credit_balance: int = 0
     quota_exhausted: bool = False
 
 

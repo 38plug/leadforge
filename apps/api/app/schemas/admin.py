@@ -119,7 +119,13 @@ class LeadRevealOut(BaseModel):
     website: str | None
     used: int
     limit: int
+    # Total unlocks still available: the rest of the weekly allowance plus any
+    # purchased pack. Split out below so the interface can say which is which
+    # instead of showing a number larger than the plan's own limit with no
+    # explanation.
     remaining: int
+    included_remaining: int = 0
+    credit_balance: int = 0
 
 
 class QuotaOut(BaseModel):
@@ -127,5 +133,7 @@ class QuotaOut(BaseModel):
     used: int
     limit: int
     remaining: int
+    included_remaining: int = 0
+    credit_balance: int = 0
     exhausted: bool
     period: str

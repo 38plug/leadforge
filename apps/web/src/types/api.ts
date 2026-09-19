@@ -316,7 +316,12 @@ export interface ApiUsage {
   // interface cannot disagree with the server about someone's plan.
   lead_reveals?: number;
   lead_reveals_limit?: number;
+  /** Everything still available: the rest of the week's allowance plus packs. */
   lead_reveals_remaining?: number;
+  /** Only what is left of the plan's own weekly allowance. */
+  lead_reveals_included_remaining?: number;
+  /** Unlocks bought outright. These do not expire when the week rolls over. */
+  credit_balance?: number;
   quota_exhausted?: boolean;
 }
 

@@ -124,8 +124,15 @@ def test_an_already_unlocked_lead_stays_readable_at_the_limit(
     assert response.status_code == 200, "re-opening an unlocked lead is free"
 
 
-def test_a_lead_unlocked_in_an_earlier_week_stays_unlocked(db_session, demo_workspace, lead_with_contact):
-    """Quota refills weekly; access to a lead already bought does not."""
+def test_a_lead_unlocked_in_an_earlier_week_locks_again(db_session, demo_workspace, lead_with_contact):
+    """Unlocks are scoped to the week they were bought in.
+
+    This is the deliberate half of the policy: without it, a heavy user works
+    forever from one week's allowance and never has a reason to buy more. The
+    cost is real - re-opening a lead from last week is charged again - and
+    there is currently no export, so a customer who wants to keep a number has
+    to copy it out while the week lasts.
+    """
     db_session.add(
         LeadReveal(
             workspace_id=demo_workspace.id,
@@ -135,10 +142,155 @@ def test_a_lead_unlocked_in_an_earlier_week_stays_unlocked(db_session, demo_work
     )
     db_session.commit()
 
-    assert quota_service.is_revealed(db_session, demo_workspace.id, lead_with_contact.id)
+    assert not quota_service.is_revealed(db_session, demo_workspace.id, lead_with_contact.id)
     assert quota_service.reveals_used(db_session, demo_workspace.id) == 0, (
-        "an unlock from an earlier week must not count against this week"
+        "an unlock from an earlier week must not count against this week either"
     )
+
+
+def test_unlocking_again_in_a_new_week_is_allowed(db_session, demo_workspace, lead_with_contact):
+    """The old unique key was (workspace, lead) and would reject this as a
+    duplicate. Period-scoping is worthless if the second unlock cannot be
+    written."""
+    db_session.add(
+        LeadReveal(workspace_id=demo_workspace.id, lead_id=lead_with_contact.id, period="2020-W01")
+    )
+    db_session.commit()
+
+    quota_service.reveal_lead(db_session, demo_workspace, lead_with_contact.id, user_id=None)
+    db_session.commit()
+
+    assert quota_service.is_revealed(db_session, demo_workspace.id, lead_with_contact.id)
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1
+
+
+# --- purchased credit packs ----------------------------------------------
+# A pack is bought outright, so it must behave differently from the weekly
+# allowance in two ways: it does not expire, and it is never spent while
+# included leads remain.
+
+
+def _buy_credits(db_session, workspace, credits: int, session_id: str = "cs_test_1"):
+    from app.models.misc import CreditPurchase
+
+    db_session.add(
+        CreditPurchase(
+            workspace_id=workspace.id,
+            credits=credits,
+            amount_cents=2000,
+            currency="usd",
+            stripe_session_id=session_id,
+        )
+    )
+    db_session.commit()
+
+
+def _fill_the_week(db_session, workspace):
+    period = quota_service.current_period()
+    for index in range(quota_service.limit_for(workspace.plan)):
+        db_session.add(
+            LeadReveal(workspace_id=workspace.id, lead_id=f"filler-{index}", period=period)
+        )
+    db_session.commit()
+
+
+def test_credits_extend_the_week_once_the_allowance_is_gone(
+    client, auth_headers, demo_workspace, db_session, lead_with_contact
+):
+    _fill_the_week(db_session, demo_workspace)
+    _buy_credits(db_session, demo_workspace, 200)
+
+    response = client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
+    assert response.status_code == 200, "a bought pack must actually unlock something"
+    assert quota_service.credit_balance(db_session, demo_workspace.id) == 199
+
+
+def test_included_leads_are_spent_before_bought_ones(db_session, demo_workspace, lead_with_contact):
+    """Included leads refill on Monday and credits do not, so spending a paid
+    credit while a free one is going unused quietly wastes money the customer
+    already handed over."""
+    _buy_credits(db_session, demo_workspace, 200)
+
+    quota_service.reveal_lead(db_session, demo_workspace, lead_with_contact.id, user_id=None)
+    db_session.commit()
+
+    assert quota_service.credit_balance(db_session, demo_workspace.id) == 200
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1
+
+
+def test_credits_survive_the_week_rolling_over(db_session, demo_workspace):
+    """The balance is derived from purchases minus credit-funded unlocks, with
+    no period in it, so a new week cannot silently erase what was bought."""
+    _buy_credits(db_session, demo_workspace, 200)
+    db_session.add(
+        LeadReveal(
+            workspace_id=demo_workspace.id,
+            lead_id="old-lead",
+            period="2020-W01",
+            from_credit=True,
+        )
+    )
+    db_session.commit()
+
+    assert quota_service.credit_balance(db_session, demo_workspace.id) == 199
+
+
+def test_the_limit_still_applies_once_credits_run_out(
+    client, auth_headers, demo_workspace, db_session, lead_with_contact
+):
+    _fill_the_week(db_session, demo_workspace)
+    _buy_credits(db_session, demo_workspace, 1)
+    db_session.add(
+        LeadReveal(
+            workspace_id=demo_workspace.id,
+            lead_id="spent-on-credit",
+            period=quota_service.current_period(),
+            from_credit=True,
+        )
+    )
+    db_session.commit()
+
+    response = client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
+    assert response.status_code == 402
+    assert response.json()["detail"]["code"] == "QUOTA_EXCEEDED"
+
+
+def test_a_redelivered_purchase_webhook_grants_credits_once(db_session, demo_workspace):
+    """Stripe retries any webhook it does not get a 2xx for, so the same paid
+    session arriving twice is ordinary, not an attack. The unique session id
+    is the whole of the protection."""
+    from app.services import billing
+
+    session = {
+        "id": "cs_test_duplicate",
+        "amount_total": 2000,
+        "currency": "usd",
+        "metadata": {
+            "workspace_id": demo_workspace.id,
+            "purchase_type": "credit_pack",
+            "credits": "200",
+        },
+    }
+
+    assert billing.grant_credits_from_session(db_session, session) is True
+    db_session.commit()
+    assert billing.grant_credits_from_session(db_session, session) is False
+    db_session.commit()
+
+    assert quota_service.credit_balance(db_session, demo_workspace.id) == 200
+
+
+def test_a_session_that_is_not_a_credit_pack_grants_nothing(db_session, demo_workspace):
+    """Subscription checkouts go through the same event, and must not be read
+    as a pack purchase."""
+    from app.services import billing
+
+    granted = billing.grant_credits_from_session(
+        db_session,
+        {"id": "cs_test_sub", "metadata": {"workspace_id": demo_workspace.id, "plan": "PRO"}},
+    )
+    assert granted is False
+    assert quota_service.credit_balance(db_session, demo_workspace.id) == 0
 
 
 def test_another_workspace_cannot_unlock_your_lead(client, lead_with_contact, db_session):

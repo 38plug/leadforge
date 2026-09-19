@@ -427,8 +427,9 @@ def reveal_lead_contact(
                 "code": "QUOTA_EXCEEDED",
                 "message": (
                     f"You have used all {exc.limit} leads included in the "
-                    f"{exc.plan} plan this week. Your allowance refills on Monday, "
-                    "or upgrade for a larger one."
+                    f"{exc.plan} plan this week. Your allowance refills on Monday. "
+                    "You can also buy a pack of extra leads, or upgrade for a "
+                    "larger weekly allowance."
                 ),
                 "used": exc.used,
                 "limit": exc.limit,
@@ -448,5 +449,7 @@ def reveal_lead_contact(
         used=int(state["used"]),
         limit=int(state["limit"]),
         remaining=int(state["remaining"]),
+        included_remaining=int(state["included_remaining"]),
+        credit_balance=int(state["credit_balance"]),
     )
 

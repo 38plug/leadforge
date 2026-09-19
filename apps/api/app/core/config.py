@@ -132,6 +132,14 @@ class Settings(BaseSettings):
     stripe_price_pro: str | None = None
     stripe_price_agency: str | None = None
 
+    # One-off pack of lead unlocks, for someone who needs more this week but
+    # does not want a monthly bill. A one-time price, not a recurring one.
+    stripe_price_credit_pack: str | None = None
+    # How many unlocks that price grants. Kept here rather than read from the
+    # Stripe product so the amount granted is decided by this application,
+    # which is what the webhook must be able to trust.
+    credit_pack_size: int = 200
+
     cors_origins: list[str] = [
         "http://localhost:3000",
         "https://leadforge-wheat-seven.vercel.app",

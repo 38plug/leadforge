@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Phone, Mail, Globe, MapPin, Lock, Loader2, Sparkles } from "lucide-react";
+import { Phone, Mail, Globe, MapPin, Lock, Loader2, Sparkles, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api";
@@ -17,6 +17,8 @@ interface RevealedContact {
   used: number;
   limit: number;
   remaining: number;
+  included_remaining: number;
+  credit_balance: number;
 }
 
 /**
@@ -27,8 +29,9 @@ interface RevealedContact {
  * for data the browser has never received. That is what makes the limit real
  * rather than a CSS effect anyone can inspect their way around.
  *
- * Unlocking the same lead again is free, so a user who returns to a lead they
- * already opened is not charged twice.
+ * Reopening the same lead within the week is free, so a user who returns to a
+ * lead they already opened is not charged twice. Unlocks are scoped to the
+ * week they were bought in, so the same lead does cost again next week.
  */
 export function RevealContact({
   leadId,
@@ -82,10 +85,13 @@ export function RevealContact({
       const result = await api.post<RevealedContact>(`/api/leads/${leadId}/reveal`);
       setContact(result);
       onRevealed?.(result);
+      // Warn on what is actually left to spend, packs included - telling
+      // someone they are nearly out while they hold 200 bought credits would
+      // be pushing an upgrade they do not need.
       if (result.remaining <= 5) {
         toast({
-          title: `${result.remaining} leads left this week`,
-          description: "Your allowance refills on Monday.",
+          title: `${result.remaining} leads left`,
+          description: "Your allowance refills on Monday, or buy a pack to keep going.",
           variant: "info",
         });
       }
@@ -119,15 +125,23 @@ export function RevealContact({
           You&apos;ve used every lead included this week
         </p>
         <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          Your allowance refills on Monday. Leads you have already unlocked stay readable —
-          nothing is taken away.
+          Your allowance refills on Monday. If you need more before then, a pack of extra
+          leads is a one-off purchase and does not expire.
         </p>
-        <Button asChild size="sm" className="mt-3">
-          <Link href="/settings?tab=billing">
-            <Sparkles className="h-3.5 w-3.5" />
-            Upgrade for a larger allowance
-          </Link>
-        </Button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild size="sm">
+            <Link href="/settings?tab=billing">
+              <ShoppingCart className="h-3.5 w-3.5" />
+              Buy more leads
+            </Link>
+          </Button>
+          <Button asChild size="sm" variant="secondary">
+            <Link href="/settings?tab=billing">
+              <Sparkles className="h-3.5 w-3.5" />
+              Upgrade your plan
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -203,8 +217,14 @@ export function RevealContact({
       )}
       {contact && (
         <p className="mt-3 border-t border-border pt-2.5 text-2xs text-subtle-foreground">
-          <span className="numeric">{contact.remaining}</span> of{" "}
+          <span className="numeric">{contact.included_remaining}</span> of{" "}
           <span className="numeric">{contact.limit}</span> leads left this week
+          {contact.credit_balance > 0 && (
+            <>
+              {" "}
+              &middot; <span className="numeric">{contact.credit_balance}</span> bought
+            </>
+          )}
         </p>
       )}
     </div>
