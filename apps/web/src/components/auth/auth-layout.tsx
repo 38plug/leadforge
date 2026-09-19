@@ -25,9 +25,16 @@ export function AuthLayout({
       {/* ------------------------------------------------------------- brand */}
       <aside className="relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="grid-bg absolute inset-0" aria-hidden="true" />
+        {/* Two blooms on different, deliberately long cycles. They drift in
+            and out of phase, so the background never repeats visibly. */}
         <div
-          className="pointer-events-none absolute -left-1/4 top-[-20%] h-[620px] w-[620px] rounded-full blur-[130px]"
-          style={{ background: "radial-gradient(circle, hsl(var(--glow-strong) / 0.22), transparent 65%)" }}
+          className="aurora-slow pointer-events-none absolute -left-1/4 top-[-20%] h-[620px] w-[620px] rounded-full blur-[130px]"
+          style={{ background: "radial-gradient(circle, hsl(var(--glow-strong) / 0.24), transparent 65%)" }}
+          aria-hidden="true"
+        />
+        <div
+          className="aurora-slower pointer-events-none absolute bottom-[-25%] left-[10%] h-[520px] w-[520px] rounded-full blur-[140px]"
+          style={{ background: "radial-gradient(circle, hsl(var(--glow-soft) / 0.18), transparent 65%)" }}
           aria-hidden="true"
         />
 
@@ -37,19 +44,19 @@ export function AuthLayout({
         </Link>
 
         <div className="relative max-w-md">
-          <h2 className="text-[34px] font-semibold leading-[1.12] tracking-tight">
+          <h2 className="auth-enter-1 text-[34px] font-semibold leading-[1.12] tracking-tight">
             Find businesses.
             <br />
             Find opportunities.
             <br />
             <span className="text-gradient-brand">Find your next client.</span>
           </h2>
-          <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
+          <p className="auth-enter-2 mt-5 text-sm leading-relaxed text-muted-foreground">
             LeadForge discovers real local businesses, checks whether their web presence holds up,
             and scores each one so you know who is worth approaching first.
           </p>
 
-          <ul className="mt-8 flex flex-col gap-3">
+          <ul className="auth-enter-3 mt-8 flex flex-col gap-3">
             {[
               "Real businesses from OpenStreetMap — never invented",
               "Website status checked live, not guessed",

@@ -12,8 +12,13 @@ export function WelcomeOverlay({ name, onDone }: { name: string; onDone: () => v
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
-    const leaveTimer = setTimeout(() => setLeaving(true), 2600);
-    const doneTimer = setTimeout(onDone, 3200);
+    // Held longer than it takes to read. This plays once, immediately after
+    // someone commits to creating an account, and hurrying it past them wastes
+    // the one moment they are actually looking at the product rather than
+    // through it. The progress bar below finishes at 4.4s; the overlay begins
+    // leaving after that, not during.
+    const leaveTimer = setTimeout(() => setLeaving(true), 5200);
+    const doneTimer = setTimeout(onDone, 6000);
     return () => {
       clearTimeout(leaveTimer);
       clearTimeout(doneTimer);

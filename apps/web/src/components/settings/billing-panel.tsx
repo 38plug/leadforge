@@ -156,9 +156,9 @@ export function BillingPanel() {
       <Card>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
           <div>
-            <CardTitle>This month</CardTitle>
+            <CardTitle>This week</CardTitle>
             <CardDescription>
-              Leads unlocked against your allowance. It resets on the first of the month.
+              Leads unlocked against your allowance. It refills every Monday.
             </CardDescription>
           </div>
           {billing.has_billing_account && (
@@ -203,8 +203,8 @@ export function BillingPanel() {
               </div>
               {usage.quota_exhausted && (
                 <p className="text-2xs text-warning">
-                  You have used this month&apos;s allowance. Upgrade for a larger one, or wait for
-                  the reset.
+                  You have used this week&apos;s allowance. Upgrade for a larger one, or wait for
+                  Monday.
                 </p>
               )}
             </>
@@ -252,7 +252,7 @@ export function BillingPanel() {
                   <li className="flex items-center gap-1.5">
                     <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
                     <span className="numeric">{option.lead_limit.toLocaleString()}</span> lead
-                    unlocks a month
+                    unlocks a week
                   </li>
                   <li className="flex items-center gap-1.5">
                     <Check className="h-3 w-3 shrink-0 text-primary" aria-hidden="true" />

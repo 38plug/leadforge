@@ -102,7 +102,9 @@ def test_the_allowance_is_enforced(client, auth_headers, demo_workspace, db_sess
     detail = response.json()["detail"]
     assert detail["code"] == "QUOTA_EXCEEDED"
     assert detail["limit"] == limit
-    assert "resets" in detail["message"], "the message must say the limit is temporary"
+    assert "Monday" in detail["message"], (
+        "the message must name when the allowance comes back, not just that it is gone"
+    )
 
 
 def test_an_already_unlocked_lead_stays_readable_at_the_limit(
@@ -122,19 +124,21 @@ def test_an_already_unlocked_lead_stays_readable_at_the_limit(
     assert response.status_code == 200, "re-opening an unlocked lead is free"
 
 
-def test_a_lead_unlocked_last_month_stays_unlocked(db_session, demo_workspace, lead_with_contact):
-    """Quota resets monthly; access to a lead already bought does not."""
+def test_a_lead_unlocked_in_an_earlier_week_stays_unlocked(db_session, demo_workspace, lead_with_contact):
+    """Quota refills weekly; access to a lead already bought does not."""
     db_session.add(
         LeadReveal(
             workspace_id=demo_workspace.id,
             lead_id=lead_with_contact.id,
-            period="2020-01",
+            period="2020-W01",
         )
     )
     db_session.commit()
 
     assert quota_service.is_revealed(db_session, demo_workspace.id, lead_with_contact.id)
-    assert quota_service.reveals_used(db_session, demo_workspace.id) == 0, "old period, current allowance free"
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 0, (
+        "an unlock from an earlier week must not count against this week"
+    )
 
 
 def test_another_workspace_cannot_unlock_your_lead(client, lead_with_contact, db_session):

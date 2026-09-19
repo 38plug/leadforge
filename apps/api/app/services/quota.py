@@ -7,8 +7,9 @@ is the unit the plan is counted in. Three decisions shape this:
   * Metering is per lead, not per click. Opening the same lead again is free -
     otherwise the number would measure clicking, and a user re-checking a
     phone number they already paid for would be charged twice.
-  * The allowance is monthly and resets on the first of the month. Nothing is
-    deducted permanently, so hitting the limit is a wait, not a loss.
+  * The allowance is weekly and refills every Monday. Nothing is deducted
+    permanently, so reaching the limit is a short wait rather than a loss,
+    and a lead already unlocked stays readable for good.
   * Enforcement is server-side, and locked details are removed from the API
     response rather than hidden by the interface. A paywall that only blurs
     in CSS is not a paywall: the value is still in the payload.
@@ -36,7 +37,7 @@ DEFAULT_PLAN = "FREE"
 
 
 class QuotaExceeded(Exception):
-    """Raised when a workspace has used its monthly allowance."""
+    """Raised when a workspace has used this week's allowance."""
 
     def __init__(self, used: int, limit: int, plan: str):
         self.used = used
@@ -46,8 +47,25 @@ class QuotaExceeded(Exception):
 
 
 def current_period() -> str:
-    """The month quota is counted against, as YYYY-MM."""
-    return datetime.now(timezone.utc).strftime("%Y-%m")
+    """The week quota is counted against, as an ISO year and week: 2026-W38.
+
+    ISO weeks rather than "seven days from signup": everyone's allowance
+    refills on the same Monday, so "your leads refill on Monday" is true for
+    every customer and support never has to work out an individual's cycle.
+
+    The stored value is what makes the reset happen - usage is counted for the
+    current period only, so a new week simply finds no rows.
+    """
+    return datetime.now(timezone.utc).strftime("%G-W%V")
+
+
+def next_reset_description() -> str:
+    """Plain wording for when the allowance refills, for the interface."""
+    now = datetime.now(timezone.utc)
+    days_until_monday = (7 - now.weekday()) % 7 or 7
+    if days_until_monday == 1:
+        return "tomorrow"
+    return f"in {days_until_monday} days"
 
 
 def limit_for(plan: str | None) -> int:
@@ -65,9 +83,9 @@ def reveals_used(db: Session, workspace_id: str, period: str | None = None) -> i
 def is_revealed(db: Session, workspace_id: str, lead_id: str) -> bool:
     """Has this lead ever been unlocked by this workspace?
 
-    Deliberately not scoped to the period: a lead unlocked in March stays
-    unlocked in April. Re-charging for details someone already has would make
-    saved leads decay, which is not what a lead list is for.
+    Deliberately not scoped to the period: a lead unlocked last week stays
+    unlocked this week. Re-charging for details someone already has would
+    make saved leads decay, which is not what a lead list is for.
     """
     return (
         db.query(LeadReveal)
@@ -86,7 +104,7 @@ def revealed_lead_ids(db: Session, workspace_id: str) -> set[str]:
 def reveal_lead(db: Session, workspace: Workspace, lead_id: str, user_id: str | None) -> LeadReveal:
     """Unlock one lead, consuming quota unless it is already unlocked.
 
-    Raises QuotaExceeded when the monthly allowance is spent. The caller
+    Raises QuotaExceeded when this week's allowance is spent. The caller
     commits: this records the reveal in the same transaction as anything else
     the request is doing.
     """

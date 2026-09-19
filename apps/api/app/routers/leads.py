@@ -426,9 +426,9 @@ def reveal_lead_contact(
             {
                 "code": "QUOTA_EXCEEDED",
                 "message": (
-                    f"You have unlocked all {exc.limit} leads included in the "
-                    f"{exc.plan} plan this month. Your allowance resets at the start "
-                    "of next month, or upgrade for a larger one."
+                    f"You have used all {exc.limit} leads included in the "
+                    f"{exc.plan} plan this week. Your allowance refills on Monday, "
+                    "or upgrade for a larger one."
                 ),
                 "used": exc.used,
                 "limit": exc.limit,

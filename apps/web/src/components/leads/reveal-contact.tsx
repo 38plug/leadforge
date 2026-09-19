@@ -84,8 +84,8 @@ export function RevealContact({
       onRevealed?.(result);
       if (result.remaining <= 5) {
         toast({
-          title: `${result.remaining} leads left this month`,
-          description: "Your allowance resets on the first of the month.",
+          title: `${result.remaining} leads left this week`,
+          description: "Your allowance refills on Monday.",
           variant: "info",
         });
       }
@@ -116,11 +116,11 @@ export function RevealContact({
       <div className="rounded-lg border border-warning/25 bg-warning/[0.07] p-4">
         <p className="flex items-center gap-2 text-[13px] font-medium text-warning">
           <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-          You&apos;ve unlocked every lead included this month
+          You&apos;ve used every lead included this week
         </p>
         <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-          Your allowance resets on the first of the month. Leads you have already unlocked stay
-          readable — nothing is taken away.
+          Your allowance refills on Monday. Leads you have already unlocked stay readable —
+          nothing is taken away.
         </p>
         <Button asChild size="sm" className="mt-3">
           <Link href="/settings?tab=billing">
@@ -155,7 +155,7 @@ export function RevealContact({
             </Button>
           )}
           <span className="text-2xs text-subtle-foreground">
-            Uses one lead from your monthly allowance
+            Uses one lead from your weekly allowance
           </span>
         </div>
       </div>
@@ -204,7 +204,7 @@ export function RevealContact({
       {contact && (
         <p className="mt-3 border-t border-border pt-2.5 text-2xs text-subtle-foreground">
           <span className="numeric">{contact.remaining}</span> of{" "}
-          <span className="numeric">{contact.limit}</span> leads left this month
+          <span className="numeric">{contact.limit}</span> leads left this week
         </p>
       )}
     </div>
