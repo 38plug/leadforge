@@ -646,9 +646,31 @@ NICHES_NEEDING_A_CITY = frozenset(
     }
 )
 
-# With no niche chosen there is no single phrase meaning "any business", so a
-# few verified ones are merged. Each is a category Nominatim answers to.
-_NOMINATIM_ANY_BUSINESS_PHRASES = ("restaurants", "cafes", "hairdressers", "supermarkets")
+# "Any industry" has to mean a genuine cross-section of local business, not
+# one trade. Nominatim has no phrase meaning "any business", so a spread of
+# categories is queried and the results interleaved.
+#
+# The list is deliberately varied - food, personal care, health, trade,
+# retail, hospitality - because a user choosing "any" is looking for whatever
+# is out there, and four food-adjacent categories returned a page of
+# restaurants that looked like the search was broken.
+#
+# Every phrase here is one measured as working; see _NOMINATIM_NICHE_PHRASES
+# for the ones that silently return nothing.
+_NOMINATIM_ANY_BUSINESS_PHRASES = (
+    "restaurants",
+    "hairdressers",
+    "supermarkets",
+    "car repairs",
+    "dentists",
+    "hotels",
+    "clothes shops",
+    "cafes",
+    "sports centres",
+    "bakeries",
+    "pharmacies",
+    "photographers",
+)
 
 
 class NominatimBusinessProvider(BusinessSearchProvider):
@@ -805,9 +827,29 @@ class NominatimBusinessProvider(BusinessSearchProvider):
             # this keeps border regions of neighbouring countries out.
             base_params["countrycodes"] = self._expected_country_code
 
-        for phrase in self._phrases_for_niche(filters.niche):
-            if len(results) >= filters.limit:
-                break
+        phrases = self._phrases_for_niche(filters.niche)
+
+        # Results are collected per phrase and interleaved afterwards rather
+        # than appended as they arrive. Appending fills the page from whichever
+        # category answers first, so a broad search returned one trade and
+        # looked broken. Interleaving gives every category a share.
+        per_phrase: list[list[BusinessResult]] = []
+
+        # Every phrase queried is a separate request, and Nominatim asks for no
+        # more than one a second, so a broad search is paced rather than
+        # unbounded. Eight categories is the trade: wide enough to look like a
+        # cross-section, quick enough not to feel stalled.
+        #
+        # There is deliberately no "stop once we have enough" rule here. One
+        # category alone returns more than a page, so stopping early filled
+        # every result from whichever was queried first - which is exactly the
+        # single-trade page this exists to prevent.
+        queried = phrases[:8] if len(phrases) > 1 else phrases
+
+        # No single category may dominate the page.
+        per_phrase_cap = max(3, filters.limit // 4)
+
+        for phrase in queried:
             OSMBusinessProvider._respect_nominatim_rate_limit(self)
             params = {**base_params, "q": phrase}
             try:
@@ -819,13 +861,25 @@ class NominatimBusinessProvider(BusinessSearchProvider):
                 logger.info("Nominatim search failed for %r: %s", phrase, exc)
                 continue
 
+            batch: list[BusinessResult] = []
             for entry in payload:
-                if len(results) >= filters.limit:
-                    break
                 business = self._to_business(entry, filters, place)
                 if business and business.external_ref not in seen:
                     seen.add(business.external_ref)
-                    results.append(business)
+                    batch.append(business)
+            if batch:
+                per_phrase.append(batch[:per_phrase_cap])
+
+        # Round-robin: one from each category, then the next from each, so the
+        # first page shows the range of what is there.
+        index = 0
+        while len(results) < filters.limit and any(index < len(b) for b in per_phrase):
+            for batch in per_phrase:
+                if index < len(batch):
+                    results.append(batch[index])
+                    if len(results) >= filters.limit:
+                        break
+            index += 1
 
         return results
 
