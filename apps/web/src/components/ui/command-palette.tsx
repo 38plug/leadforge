@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Search, CornerDownLeft, ArrowUp, ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_GROUPS, type NavItem } from "@/lib/navigation";
+import { ADMIN_NAV_GROUP, NAV_GROUPS, type NavItem } from "@/lib/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 /**
  * Keyboard-first navigation, opened with Cmd/Ctrl+K.
@@ -23,6 +24,7 @@ interface Command extends NavItem {
 
 export function CommandPalette() {
   const router = useRouter();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -30,10 +32,10 @@ export function CommandPalette() {
 
   const commands = useMemo<Command[]>(
     () =>
-      NAV_GROUPS.flatMap((group) =>
+      [...NAV_GROUPS, ...(user?.is_superuser ? [ADMIN_NAV_GROUP] : [])].flatMap((group) =>
         group.items.map((item) => ({ ...item, group: group.label }))
       ),
-    []
+    [user?.is_superuser]
   );
 
   const results = useMemo(() => {

@@ -45,6 +45,11 @@ class UserOut(BaseModel):
     id: str
     email: str
     full_name: str | None = None
+    # Lets the interface show the admin section to the people who have it.
+    # Not a permission in itself: every admin endpoint checks the flag on the
+    # server, because hiding a link is not access control.
+    is_superuser: bool = False
+    email_verified_at: str | None = None
 
 
 class WorkspaceOut(BaseModel):

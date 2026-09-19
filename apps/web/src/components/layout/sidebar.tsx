@@ -9,7 +9,7 @@ import { LogoMark } from "@/components/brand/logo-mark";
 import { useAuth } from "@/lib/auth-context";
 import { api } from "@/lib/api";
 import type { ApiUsage } from "@/types/api";
-import { NAV_GROUPS, isActivePath } from "@/lib/navigation";
+import { ADMIN_NAV_GROUP, NAV_GROUPS, isActivePath } from "@/lib/navigation";
 
 const PLAN_LIMITS: Record<string, number> = {
   FREE: 50,
@@ -30,7 +30,7 @@ const COLLAPSE_KEY = "leadforge_sidebar_collapsed";
  */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { workspace } = useAuth();
+  const { workspace, user } = useAuth();
   const [usage, setUsage] = useState<ApiUsage | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -87,7 +87,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 pb-3 scrollbar-none" aria-label="Main">
-        {NAV_GROUPS.map((group) => (
+        {[...NAV_GROUPS, ...(user?.is_superuser ? [ADMIN_NAV_GROUP] : [])].map((group) => (
           <div key={group.label} className="mb-5">
             {!collapsed && <p className="label-caps mb-1.5 px-2.5">{group.label}</p>}
             <ul className="flex flex-col gap-0.5">

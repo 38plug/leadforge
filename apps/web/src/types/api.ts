@@ -4,6 +4,65 @@ export interface ApiUser {
   id: string;
   email: string;
   full_name: string | null;
+  /** Platform administrator. Decides whether the admin section is shown -
+   *  never whether it is allowed, which the server checks on every call. */
+  is_superuser?: boolean;
+  email_verified_at?: string | null;
+}
+
+// ---------------------------------------------------------------- admin
+
+export interface AdminWorkspaceRef {
+  id: string;
+  name: string;
+  plan: string;
+  role: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  is_superuser: boolean;
+  created_at: string;
+  workspaces: AdminWorkspaceRef[];
+}
+
+export interface AdminWorkspace {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  created_at: string;
+  member_count: number;
+  lead_count: number;
+  subscription_status: string | null;
+  payment_provider: string | null;
+}
+
+export interface AdminOverview {
+  total_users: number;
+  active_users: number;
+  total_workspaces: number;
+  total_leads: number;
+  total_companies: number;
+  active_coupons: number;
+  paying_subscriptions: number;
+  payment_provider_connected: boolean;
+}
+
+export interface AdminCoupon {
+  id: string;
+  code: string;
+  description: string | null;
+  percent_off: number | null;
+  amount_off_cents: number | null;
+  max_redemptions: number | null;
+  redeemed_count: number;
+  expires_at: string | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface ApiWorkspace {

@@ -9,6 +9,7 @@ import {
   FileText,
   Database,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,9 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /** Rendered only for platform administrators. Hiding it is presentation,
+   *  not protection - the endpoints behind it check on the server. */
+  adminOnly?: boolean;
 }
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -62,7 +66,17 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-export const ALL_NAV_ITEMS: NavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+export const ADMIN_NAV_GROUP: NavGroup = {
+  label: "Platform",
+  adminOnly: true,
+  items: [
+    { href: "/admin", label: "Admin", icon: ShieldCheck, hint: "Accounts, workspaces, coupons" },
+  ],
+};
+
+export const ALL_NAV_ITEMS: NavItem[] = [...NAV_GROUPS, ADMIN_NAV_GROUP].flatMap(
+  (group) => group.items
+);
 
 /** The page title shown in the top bar, matched longest-prefix first. */
 export function titleForPath(pathname: string): string {
