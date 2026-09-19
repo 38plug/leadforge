@@ -17,12 +17,14 @@ Two rules shape the destructive operations:
     other members are left alone and the membership is dropped.
 """
 
+import pathlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.company import Company
@@ -54,6 +56,46 @@ def require_superuser(user: User = Depends(get_current_user)) -> User:
     if not user.is_superuser:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Platform administrator access required")
     return user
+
+
+@router.get("/config-status")
+def config_status(
+    settings: Settings = Depends(get_settings),
+    _: User = Depends(require_superuser),
+):
+    """Report which settings are present, by name only - never a value.
+
+    Diagnosing "I added the key but the app does not see it" otherwise means
+    guessing between a missing value, a misspelled name, a file the app never
+    reads, and a service that has not restarted. This answers it directly, and
+    is safe to read aloud: it reports presence, never contents.
+    """
+    from app.core.config import _secret_env_files
+
+    def state(value: object) -> str:
+        return "set" if value else "MISSING"
+
+    secret_files = [pathlib.Path(path).name for path in _secret_env_files()]
+
+    return {
+        "environment": settings.environment,
+        # Where configuration could have come from, so a file in the wrong
+        # place is visible rather than inferred.
+        "secret_files_mounted": secret_files or ["none"],
+        "settings": {
+            "DATABASE_URL": "postgres" if settings.database_url.startswith("postgres") else "sqlite (!)",
+            "JWT_SECRET": state(settings.jwt_secret != "dev-secret-change-me"),
+            "SECRET_ENCRYPTION_KEY": state(settings.secret_encryption_key),
+            "STRIPE_SECRET_KEY": state(settings.stripe_secret_key),
+            "STRIPE_WEBHOOK_SECRET": state(settings.stripe_webhook_secret),
+            "STRIPE_PRICE_STARTER": state(settings.stripe_price_starter),
+            "STRIPE_PRICE_PRO": state(settings.stripe_price_pro),
+            "STRIPE_PRICE_AGENCY": state(settings.stripe_price_agency),
+            "AI_PROVIDER_API_KEY": state(settings.ai_provider_api_key),
+            "SMTP_HOST": state(settings.smtp_host),
+            "OSM_CONTACT": state(settings.osm_contact),
+        },
+    }
 
 
 # --------------------------------------------------------------- overview
