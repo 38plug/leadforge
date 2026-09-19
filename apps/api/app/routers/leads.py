@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -31,6 +33,29 @@ def _lead_query(db: Session, workspace_id: str):
         )
         .filter(Lead.workspace_id == workspace_id)
     )
+
+
+def _check_websites_concurrently(website_provider, businesses: list) -> dict:
+    """Check every business's website at once, keyed by its external ref.
+
+    Returns a result for every business, including those with no website at
+    all, so the caller can look each one up without a second code path.
+    """
+    if not businesses:
+        return {}
+
+    results: dict[str, object] = {}
+
+    def check(business):
+        return business.external_ref, website_provider.detect_website(business.website)
+
+    # Enough to make the wait roughly one timeout rather than twenty-five,
+    # without opening an unreasonable number of sockets at once.
+    workers = min(10, len(businesses))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for external_ref, check_result in pool.map(check, businesses):
+            results[external_ref] = check_result
+    return results
 
 
 def _serialise(db: Session, workspace_id: str, leads: list[Lead]) -> list[LeadOut]:
@@ -127,6 +152,17 @@ def search_leads(
         )
     )
 
+    # Website checks were the slowest part of a search by a wide margin: one
+    # request per business, in sequence, each waiting up to the provider's
+    # timeout. Twenty-five businesses could spend over two minutes here while
+    # the user watched a progress bar, which reads as the search being broken.
+    #
+    # They are independent of each other and almost entirely spent waiting on
+    # the network, so they run together. The worker count is capped because
+    # these are outbound requests to twenty-five unrelated small businesses,
+    # not a pool to saturate.
+    website_checks = _check_websites_concurrently(website_provider, businesses)
+
     created_leads: list[Lead] = []
     for biz in businesses:
         if filters.require_phone and not biz.phone:
@@ -190,7 +226,7 @@ def search_leads(
                 contact.phone = biz.phone or contact.phone
                 contact.email = biz.email or contact.email
 
-        website_check = website_provider.detect_website(biz.website)
+        website_check = website_checks[biz.external_ref]
         if filters.website_status and website_check.status != filters.website_status:
             continue
 

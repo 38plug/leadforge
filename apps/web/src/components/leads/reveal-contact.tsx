@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Phone, Mail, Globe, MapPin, Lock, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,23 @@ export function RevealContact({
   const [quotaSpent, setQuotaSpent] = useState<{ limit: number; plan: string } | null>(null);
 
   const isOpen = revealed || contact !== null;
+
+  // Opening a lead unlocks it. That is the product's model: a lead you have
+  // looked at is one you have used, so the number counts leads rather than
+  // clicks on a second button.
+  //
+  // The guard matters because React runs effects twice in development and the
+  // component remounts on navigation - without it the same lead would be
+  // requested repeatedly. The request is idempotent server-side, so a repeat
+  // costs nothing, but there is no reason to make it.
+  const requested = useRef(false);
+  useEffect(() => {
+    if (isOpen || unlocking || quotaSpent || requested.current) return;
+    requested.current = true;
+    void unlock();
+    // unlock is stable for the lifetime of this component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, leadId]);
   const shownPhone = contact?.phone ?? phone ?? null;
   const shownEmail = contact?.email ?? email ?? null;
   const shownWebsite = contact?.website ?? website ?? null;
@@ -126,14 +143,17 @@ export function RevealContact({
           ))}
         </div>
         <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-border pt-3.5">
-          <Button size="sm" onClick={unlock} disabled={unlocking}>
-            {unlocking ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
+          {unlocking ? (
+            <span className="flex items-center gap-2 text-2xs text-muted-foreground" role="status">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Unlocking contact details...
+            </span>
+          ) : (
+            <Button size="sm" onClick={unlock}>
               <Lock className="h-3.5 w-3.5" />
-            )}
-            {unlocking ? "Unlocking..." : "Unlock contact details"}
-          </Button>
+              Show contact details
+            </Button>
+          )}
           <span className="text-2xs text-subtle-foreground">
             Uses one lead from your monthly allowance
           </span>
