@@ -4,7 +4,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test_leadforge.db")
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -26,6 +26,16 @@ def db_session():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    # SQLite ignores foreign keys unless asked not to, while production runs
+    # Postgres, which enforces them. Without this the suite cannot catch a
+    # delete that leaves rows pointing at something gone - it passes locally
+    # and raises an IntegrityError in front of a customer.
+    @event.listens_for(engine, "connect")
+    def _enforce_foreign_keys(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
 

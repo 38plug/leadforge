@@ -92,6 +92,10 @@ def config_status(
             "STRIPE_PRICE_STARTER": state(settings.stripe_price_starter),
             "STRIPE_PRICE_PRO": state(settings.stripe_price_pro),
             "STRIPE_PRICE_AGENCY": state(settings.stripe_price_agency),
+            # Without this the lead pack shows as "Unavailable" on the billing
+            # page, which looks like a broken button rather than a missing
+            # setting. Named here so the cause is visible.
+            "STRIPE_PRICE_CREDIT_PACK": state(settings.stripe_price_credit_pack),
             "AI_PROVIDER_API_KEY": state(settings.ai_provider_api_key),
             # Reported as one line because a host without credentials sends
             # nothing: showing SMTP_HOST alone as "set" implied email worked

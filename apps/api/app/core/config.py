@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     # How many unlocks that price grants. Kept here rather than read from the
     # Stripe product so the amount granted is decided by this application,
     # which is what the webhook must be able to trust.
-    credit_pack_size: int = 200
+    credit_pack_size: int = 50
 
     cors_origins: list[str] = [
         "http://localhost:3000",

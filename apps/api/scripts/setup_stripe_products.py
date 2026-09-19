@@ -59,10 +59,14 @@ PLANS = [
 # in the API settings), not read back from this product, so the two must be
 # kept in step. That is why the size appears in the description and metadata.
 CREDIT_PACK = {
-    "name": "LeadForge Lead Pack",
-    "description": "200 extra lead unlocks. One-off purchase, does not expire.",
-    "amount_cents": 2000,
-    "credits": 200,
+    # Renamed as well as repriced: a price is a property of the Price object,
+    # but this script matches an existing product by name. Reusing the old
+    # name would attach a second price to the 200-lead product and leave the
+    # Dashboard describing a pack nobody can buy.
+    "name": "LeadForge Lead Pack (50)",
+    "description": "50 extra lead unlocks. One-off purchase, does not expire.",
+    "amount_cents": 1000,
+    "credits": 50,
     "env_var": "STRIPE_PRICE_CREDIT_PACK",
 }
 

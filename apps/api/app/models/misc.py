@@ -94,12 +94,23 @@ class LeadReveal(Base):
     """
 
     __tablename__ = "lead_reveals"
+    # Rows whose lead has since been deleted hold NULL here. Both Postgres and
+    # SQLite treat NULLs as distinct in a unique constraint, so any number of
+    # them coexist - which is what we want, since each is a separate unlock
+    # that was separately paid for.
     __table_args__ = (
         UniqueConstraint("workspace_id", "lead_id", "period", name="uq_reveal_workspace_lead_period"),
     )
 
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id"), index=True, nullable=False)
-    lead_id: Mapped[str] = mapped_column(ForeignKey("leads.id"), index=True, nullable=False)
+    # Nullable, and SET NULL rather than CASCADE on purpose. This row records
+    # that an unlock was spent, which deleting the lead afterwards does not
+    # undo - the customer already read the phone number. Cascading would hand
+    # the allowance back and make the limit trivially defeatable: open a lead,
+    # copy the number, delete it, repeat.
+    lead_id: Mapped[str | None] = mapped_column(
+        ForeignKey("leads.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True)
     # ISO week ("2026-W38"): the allowance refills weekly, so usage is counted
     # per period and a new week simply finds no rows.

@@ -84,9 +84,16 @@ def test_a_workspace_sends_through_its_own_mailbox(client, auth_headers, db_sess
 
 def test_a_workspace_without_settings_does_not_borrow_another_ones(db_session, demo_workspace):
     # A second workspace's configured mailbox must never be picked up here.
+    # A real workspace row rather than an invented id: the id has to exist for
+    # the settings to be reachable at all, so an invented one proves nothing.
+    from app.models.workspace import Workspace
+
+    other = Workspace(name="Other", slug="other-mailbox-ws")
+    db_session.add(other)
+    db_session.flush()
     db_session.add(
         WorkspaceEmailSettings(
-            workspace_id="some-other-workspace",
+            workspace_id=other.id,
             from_address="other@example.com",
             smtp_host="smtp.other.com",
             smtp_username="other@example.com",

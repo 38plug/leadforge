@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.company import WebsiteStatus
 from app.models.lead import LeadPriority, LeadStatus
@@ -113,3 +113,25 @@ class LeadSearchRequest(BaseModel):
 class LeadSearchResult(BaseModel):
     total_found: int
     leads: list[LeadOut]
+
+
+class LeadDeleteRequest(BaseModel):
+    """The leads a bulk delete should remove.
+
+    Capped so one request cannot ask for an unbounded delete by accident. The
+    table's own "select all" is a page at a time, so this is well above any
+    selection the interface can produce.
+    """
+
+    lead_ids: list[str] = Field(default_factory=list, max_length=1000)
+
+
+class LeadsDeleted(BaseModel):
+    """How many leads the request actually removed.
+
+    Reported rather than assumed: a selection can contain ids already deleted
+    in another tab, and the interface should say what happened rather than
+    what was asked for.
+    """
+
+    deleted: int

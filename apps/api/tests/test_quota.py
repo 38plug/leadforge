@@ -15,6 +15,41 @@ from app.models.misc import LeadReveal
 from app.services import quota as quota_service
 
 
+def _make_lead(db_session, workspace, suffix: str) -> Lead:
+    """A real lead to hang an unlock on.
+
+    Unlocks are foreign-keyed to leads, so filling an allowance with invented
+    lead ids only worked while the test database ignored foreign keys. It
+    does not any more, and neither does production.
+    """
+    company = Company(
+        workspace_id=workspace.id,
+        name=f"Filler {suffix}",
+        niche="Restaurant",
+        country="Portugal",
+        city="Lisboa",
+        source="lead_finder",
+        external_ref=f"osm-filler-{suffix}",
+    )
+    db_session.add(company)
+    db_session.flush()
+    lead = Lead(workspace_id=workspace.id, company_id=company.id, score=10)
+    db_session.add(lead)
+    db_session.flush()
+    return lead
+
+
+def _fill_the_allowance(db_session, workspace, period: str | None = None) -> None:
+    """Spend every lead the plan includes for the given period."""
+    period = period or quota_service.current_period()
+    for index in range(quota_service.limit_for(workspace.plan)):
+        lead = _make_lead(db_session, workspace, f"{period}-{index}")
+        db_session.add(
+            LeadReveal(workspace_id=workspace.id, lead_id=lead.id, period=period)
+        )
+    db_session.commit()
+
+
 @pytest.fixture()
 def lead_with_contact(db_session, demo_workspace):
     company = Company(
@@ -85,17 +120,8 @@ def test_searching_does_not_spend_quota(client, auth_headers, demo_workspace, db
 
 def test_the_allowance_is_enforced(client, auth_headers, demo_workspace, db_session, lead_with_contact):
     """Fill the FREE allowance, then the next unlock is refused."""
-    period = quota_service.current_period()
     limit = quota_service.limit_for(demo_workspace.plan)
-    for index in range(limit):
-        db_session.add(
-            LeadReveal(
-                workspace_id=demo_workspace.id,
-                lead_id=f"placeholder-{index}",
-                period=period,
-            )
-        )
-    db_session.commit()
+    _fill_the_allowance(db_session, demo_workspace)
 
     response = client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
     assert response.status_code == 402, "402 Payment Required: allowed to ask, allowance spent"
@@ -113,12 +139,7 @@ def test_an_already_unlocked_lead_stays_readable_at_the_limit(
     """Leads already paid for must not lock again when the month fills up."""
     client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
 
-    period = quota_service.current_period()
-    for index in range(quota_service.limit_for(demo_workspace.plan)):
-        db_session.add(
-            LeadReveal(workspace_id=demo_workspace.id, lead_id=f"filler-{index}", period=period)
-        )
-    db_session.commit()
+    _fill_the_allowance(db_session, demo_workspace)
 
     response = client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
     assert response.status_code == 200, "re-opening an unlocked lead is free"
@@ -186,12 +207,7 @@ def _buy_credits(db_session, workspace, credits: int, session_id: str = "cs_test
 
 
 def _fill_the_week(db_session, workspace):
-    period = quota_service.current_period()
-    for index in range(quota_service.limit_for(workspace.plan)):
-        db_session.add(
-            LeadReveal(workspace_id=workspace.id, lead_id=f"filler-{index}", period=period)
-        )
-    db_session.commit()
+    _fill_the_allowance(db_session, workspace)
 
 
 def test_credits_extend_the_week_once_the_allowance_is_gone(
@@ -222,10 +238,11 @@ def test_credits_survive_the_week_rolling_over(db_session, demo_workspace):
     """The balance is derived from purchases minus credit-funded unlocks, with
     no period in it, so a new week cannot silently erase what was bought."""
     _buy_credits(db_session, demo_workspace, 200)
+    old_lead = _make_lead(db_session, demo_workspace, "old")
     db_session.add(
         LeadReveal(
             workspace_id=demo_workspace.id,
-            lead_id="old-lead",
+            lead_id=old_lead.id,
             period="2020-W01",
             from_credit=True,
         )
@@ -240,10 +257,11 @@ def test_the_limit_still_applies_once_credits_run_out(
 ):
     _fill_the_week(db_session, demo_workspace)
     _buy_credits(db_session, demo_workspace, 1)
+    spent = _make_lead(db_session, demo_workspace, "spent-on-credit")
     db_session.add(
         LeadReveal(
             workspace_id=demo_workspace.id,
-            lead_id="spent-on-credit",
+            lead_id=spent.id,
             period=quota_service.current_period(),
             from_credit=True,
         )
@@ -321,3 +339,26 @@ def test_plan_limits_are_defined_in_one_place():
     assert quota_service.limit_for("PRO") > quota_service.limit_for("STARTER")
     assert quota_service.limit_for(None) == quota_service.limit_for("FREE")
     assert quota_service.limit_for("nonsense") == quota_service.limit_for("FREE")
+
+
+def test_deleting_an_unlocked_lead_does_not_fail(client, auth_headers, lead_with_contact):
+    """Unlocks are foreign-keyed to leads, so a lead the user has opened
+    cannot simply be deleted out from under its own usage record."""
+    client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
+
+    response = client.delete(f"/api/leads/{lead_with_contact.id}", headers=auth_headers)
+    assert response.status_code == 204
+
+
+def test_deleting_an_unlocked_lead_does_not_refund_the_quota(
+    client, auth_headers, demo_workspace, db_session, lead_with_contact
+):
+    """Otherwise the allowance is trivially defeated: open a lead, copy the
+    number, delete it, and the lead is free. Usage records what was consumed,
+    which is not undone by throwing away the row afterwards."""
+    client.post(f"/api/leads/{lead_with_contact.id}/reveal", headers=auth_headers)
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1
+
+    client.delete(f"/api/leads/{lead_with_contact.id}", headers=auth_headers)
+
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1

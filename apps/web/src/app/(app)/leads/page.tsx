@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, Search, ArrowUpDown, Radar, X } from "lucide-react";
+import { Download, Search, ArrowUpDown, Radar, X, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import { LeadStatusBadge, ScorePill, WebsiteStatusBadge } from "@/components/lea
 import { ErrorState, EmptyState, SkeletonRows } from "@/components/ui/state";
 import { formatNumber } from "@/lib/utils";
 import { useApi } from "@/lib/use-api";
+import { api, ApiError } from "@/lib/api";
+import { useToast } from "@/components/ui/toast";
 import { adaptLead } from "@/lib/adapters";
 import type { ApiLead } from "@/types/api";
 import type { Lead } from "@/types/lead";
@@ -47,6 +49,37 @@ export default function LeadsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { toast } = useToast();
+
+  async function deleteSelected() {
+    setDeleting(true);
+    try {
+      const { deleted } = await api.post<{ deleted: number }>("/api/leads/delete", {
+        lead_ids: [...selected],
+      });
+      toast({
+        title: `${deleted} lead${deleted === 1 ? "" : "s"} deleted`,
+        // The count comes from the server rather than from the selection: a
+        // lead already removed in another tab is skipped, and saying "10
+        // deleted" when 9 went would be a quiet lie.
+        description: "This cannot be undone.",
+        variant: "success",
+      });
+      setSelected(new Set());
+      setConfirmingDelete(false);
+      refetch();
+    } catch (err) {
+      toast({
+        title: "Could not delete those leads",
+        description: err instanceof ApiError ? err.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   // Only offer countries actually present in the saved leads — a dropdown of
   // 195 mostly-empty options would be noise.
@@ -184,9 +217,59 @@ export default function LeadsPage() {
               <Download className="h-3.5 w-3.5" />
               Export selection
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               <X className="h-3.5 w-3.5" />
               Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed in place rather than with window.confirm: deleting leads
+          is not undoable, and the count is worth reading before agreeing to
+          it. Unlocked leads stay counted against the weekly allowance, which
+          is said here rather than discovered afterwards. */}
+      {confirmingDelete && (
+        <div className="animate-rise-in rounded-lg border border-destructive/25 bg-destructive/[0.06] p-4">
+          <p className="text-[13px] font-medium text-destructive">
+            Delete <span className="numeric">{selected.size}</span>{" "}
+            {selected.size === 1 ? "lead" : "leads"}?
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            This removes them and their notes, tasks and activity for good. Any you already
+            unlocked stay counted against this week&apos;s allowance — deleting a lead does not
+            give the unlock back. Export first if you want to keep the contact details.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="destructive" disabled={deleting} onClick={deleteSelected}>
+              {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {deleting ? "Deleting..." : `Delete ${selected.size}`}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => setConfirmingDelete(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={deleting}
+              onClick={() => exportToCsv(allLeads.filter((l) => selected.has(l.id)))}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export these first
             </Button>
           </div>
         </div>
@@ -273,10 +356,28 @@ export default function LeadsPage() {
                     <td className="px-4 py-3 text-xs text-muted-foreground">{lead.social.instagram ? `@${lead.social.instagram}` : "—"}</td>
                     <td className="px-4 py-3"><ScorePill score={lead.score.score} /></td>
                     <td className="px-4 py-3"><LeadStatusBadge status={lead.status} /></td>
-                    <td className="px-4 py-3 text-right">
-                      <Link href={`/leads/${lead.id}`}>
-                        <Button size="sm" variant="secondary">View</Button>
-                      </Link>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Link href={`/leads/${lead.id}`}>
+                          <Button size="sm" variant="secondary">View</Button>
+                        </Link>
+                        {/* Selects the row and opens the same confirmation as
+                            the bulk action, rather than deleting on click.
+                            One button that sometimes deletes instantly and
+                            sometimes asks would be the worse pattern. */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:bg-destructive/10"
+                          aria-label={`Delete ${lead.company}`}
+                          onClick={() => {
+                            setSelected(new Set([lead.id]));
+                            setConfirmingDelete(true);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -15,8 +15,16 @@ from app.models.workspace import User, Workspace
 from app.providers.business import BusinessSearchFilters, get_business_provider
 from app.providers.website import get_website_provider
 from app.schemas.ai import AILeadAnalysis
-from app.schemas.lead import LeadOut, LeadSearchRequest, LeadSearchResult, LeadStatusUpdate
+from app.schemas.lead import (
+    LeadDeleteRequest,
+    LeadOut,
+    LeadSearchRequest,
+    LeadSearchResult,
+    LeadStatusUpdate,
+    LeadsDeleted,
+)
 from app.services.lead_scoring import LeadScoreService, ScoringInput
+from app.services import lead_deletion
 from app.services import quota as quota_service
 from app.schemas.admin import LeadRevealOut
 
@@ -120,6 +128,30 @@ def clear_all_leads(db: Session = Depends(get_db), workspace: Workspace = Depend
         db.query(Company).filter(Company.workspace_id == workspace.id).delete(synchronize_session=False)
 
     db.commit()
+
+
+@router.post("/delete", response_model=LeadsDeleted)
+def delete_selected_leads(
+    payload: LeadDeleteRequest,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    """Delete several leads at once.
+
+    POST rather than DELETE with a body: request bodies on DELETE are poorly
+    supported by proxies and HTTP clients alike, and a selection of a few
+    hundred ids does not belong in a query string.
+
+    Ids belonging to another workspace match nothing rather than erroring, so
+    a stale selection deletes what it legitimately can instead of failing
+    whole. The count returned is what was actually deleted.
+    """
+    if not payload.lead_ids:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No leads were selected")
+
+    deleted = lead_deletion.delete_leads(db, workspace.id, payload.lead_ids)
+    db.commit()
+    return LeadsDeleted(deleted=deleted)
 
 
 @router.post("/search", response_model=LeadSearchResult)
@@ -354,7 +386,11 @@ def delete_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspac
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
-    db.delete(lead)
+    # Goes through the same service as a bulk delete rather than db.delete():
+    # AI analyses and campaign recipients hold non-null foreign keys that no
+    # relationship cascades, so the plain version raised an IntegrityError for
+    # any lead that had been analysed, mailed, or unlocked.
+    lead_deletion.delete_leads(db, workspace.id, [lead_id])
     db.commit()
 
 
