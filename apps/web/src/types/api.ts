@@ -31,6 +31,8 @@ export interface AdminUser {
   is_superuser: boolean;
   created_at: string;
   workspaces: AdminWorkspaceRef[];
+  /** Accounts created from the same origin, this one included. 1 is ordinary. */
+  accounts_from_same_origin: number;
 }
 
 export interface AdminWorkspace {

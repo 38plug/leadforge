@@ -301,6 +301,15 @@ def _user_out(db: Session, user: User) -> AdminUserOut:
         .all()
     ) if workspace_ids else {}
 
+    # Accounts opened from the same place. Counted here rather than joined
+    # into the list query because the list is small and this keeps _user_out
+    # usable on its own, from the single-user routes too.
+    same_origin = 1
+    if user.signup_ip_hash:
+        same_origin = (
+            db.query(User).filter(User.signup_ip_hash == user.signup_ip_hash).count()
+        )
+
     return AdminUserOut(
         id=user.id,
         email=user.email,
@@ -308,6 +317,7 @@ def _user_out(db: Session, user: User) -> AdminUserOut:
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         created_at=user.created_at,
+        accounts_from_same_origin=same_origin,
         workspaces=[
             {
                 "id": workspace.id,

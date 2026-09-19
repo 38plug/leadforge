@@ -1,6 +1,6 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -18,7 +18,7 @@ from app.schemas.auth import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from app.services import auth_tokens, transactional_email
+from app.services import auth_tokens, signup_guard, transactional_email
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -36,6 +36,7 @@ def _slugify(name: str, db: Session) -> str:
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
@@ -43,11 +44,27 @@ def register(
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
 
+    # Checked before anything is written, so a refused signup leaves nothing
+    # behind - including the slug this would otherwise consume.
+    try:
+        origin_hash = signup_guard.check_and_record(request, db, settings)
+    except signup_guard.TooManyAccounts as exc:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            (
+                f"{exc.limit} accounts have already been created from this network "
+                f"in the last {exc.window_hours // 24} days. If you are on a shared "
+                "office or campus connection, contact support and we will raise it "
+                "for you."
+            ),
+        ) from exc
+
     user = User(
         email=payload.email,
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
         is_active=True,
+        signup_ip_hash=origin_hash,
     )
     db.add(user)
     db.flush()

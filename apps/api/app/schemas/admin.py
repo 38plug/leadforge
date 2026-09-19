@@ -42,6 +42,13 @@ class AdminUserOut(BaseModel):
     is_superuser: bool
     created_at: datetime
     workspaces: list[AdminWorkspaceRef]
+    # How many accounts were created from the same origin as this one, this
+    # one included. 1 is ordinary. A cluster is the signature of somebody
+    # opening free plans to get more of the weekly allowance.
+    #
+    # A count rather than the origin itself: it answers the question an admin
+    # actually has, without putting a customer's IP address on a screen.
+    accounts_from_same_origin: int = 1
 
 
 class AdminUserUpdate(BaseModel):

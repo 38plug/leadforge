@@ -140,6 +140,29 @@ class Settings(BaseSettings):
     # which is what the webhook must be able to trust.
     credit_pack_size: int = 50
 
+    # --- Abuse ---------------------------------------------------------
+    # How many accounts one origin may create inside the window. The free
+    # plan's weekly allowance is what this protects: the cheapest way to get
+    # more of it is to make more accounts.
+    #
+    # Not 1, deliberately. An office, a coworking space and every mobile
+    # carrier put many real people behind one address, so a limit of 1 would
+    # reject genuine customers - including the team accounts the Agency plan
+    # exists to sell. Set it to 1 to be strict anyway, or 0 to disable.
+    max_accounts_per_ip: int = 3
+    # Rolling window, in hours. A week by default, matching the allowance
+    # cycle this protects: three free plans a week is a nuisance rather than
+    # a business model.
+    accounts_per_ip_window_hours: int = 168
+    # How many proxies sit in front of this application. Render puts exactly
+    # one there. The signup guard counts X-Forwarded-For entries from the
+    # right by this many, so a caller cannot choose their own apparent
+    # address by sending the header themselves. Raise it only if you add
+    # another proxy (a CDN in front of Render, say) - too high reads a value
+    # the caller controls, too low reads the proxy and groups everyone
+    # together.
+    trusted_proxy_hops: int = 1
+
     cors_origins: list[str] = [
         "http://localhost:3000",
         "https://leadforge-wheat-seven.vercel.app",

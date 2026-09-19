@@ -167,6 +167,22 @@ export function AdminAccountsPanel({ currentUserId }: { currentUserId: string })
                         {user.is_active ? "Active" : "Disabled"}
                       </Badge>
                       {isSelf && <Badge variant="outline">You</Badge>}
+                      {/* Several accounts from one place is the signature of
+                          someone opening free plans for the weekly allowance.
+                          It is not proof - an office shares an address - so
+                          this reports rather than accuses. */}
+                      {user.accounts_from_same_origin > 1 && (
+                        <Badge
+                          variant="warning"
+                          title={
+                            `${user.accounts_from_same_origin} accounts were created from the ` +
+                            "same network. That is normal for an office or campus, and is also " +
+                            "what usage farming looks like."
+                          }
+                        >
+                          {user.accounts_from_same_origin}&times; same network
+                        </Badge>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3">

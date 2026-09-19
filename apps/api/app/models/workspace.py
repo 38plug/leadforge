@@ -31,6 +31,12 @@ class User(Base):
     # everyone out of an installation whose SMTP is not configured yet.
     email_verified_at: Mapped[str | None] = mapped_column(String(64))
 
+    # Keyed hash of the origin this account was created from, for limiting how
+    # many accounts one place can open. Stored hashed because counting only
+    # needs equality, and an IP address is personal data this table has no
+    # reason to hold in readable form. See app/services/signup_guard.py.
+    signup_ip_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+
     memberships: Mapped[list["WorkspaceMember"]] = relationship(back_populates="user")
 
 
