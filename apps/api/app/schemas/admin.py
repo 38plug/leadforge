@@ -21,6 +21,15 @@ class AdminWorkspaceRef(BaseModel):
     name: str
     plan: str
     role: str
+    # The plan belongs to the workspace, not to this membership, so changing it
+    # from an account row changes it for everyone in that workspace. The count
+    # is carried so the interface can say that rather than let an admin find
+    # out afterwards.
+    member_count: int = 1
+    # "stripe" when a real subscription is behind the plan, null when it was
+    # granted by hand. The two need different warnings: setting a paying
+    # workspace to FREE here does not cancel anything in Stripe.
+    payment_provider: str | None = None
 
 
 class AdminUserOut(BaseModel):

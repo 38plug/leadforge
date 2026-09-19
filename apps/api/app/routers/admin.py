@@ -281,6 +281,22 @@ def _user_out(db: Session, user: User) -> AdminUserOut:
         .filter(WorkspaceMember.user_id == user.id)
         .all()
     )
+    # Fetched in two queries rather than per membership: the accounts screen
+    # serialises every user on the installation, so a lookup inside the loop
+    # would be one round trip per workspace per account.
+    workspace_ids = [workspace.id for _, workspace in memberships]
+    member_counts = dict(
+        db.query(WorkspaceMember.workspace_id, func.count(WorkspaceMember.id))
+        .filter(WorkspaceMember.workspace_id.in_(workspace_ids))
+        .group_by(WorkspaceMember.workspace_id)
+        .all()
+    ) if workspace_ids else {}
+    providers = dict(
+        db.query(Subscription.workspace_id, Subscription.provider)
+        .filter(Subscription.workspace_id.in_(workspace_ids))
+        .all()
+    ) if workspace_ids else {}
+
     return AdminUserOut(
         id=user.id,
         email=user.email,
@@ -289,7 +305,14 @@ def _user_out(db: Session, user: User) -> AdminUserOut:
         is_superuser=user.is_superuser,
         created_at=user.created_at,
         workspaces=[
-            {"id": workspace.id, "name": workspace.name, "plan": workspace.plan, "role": member.role.value}
+            {
+                "id": workspace.id,
+                "name": workspace.name,
+                "plan": workspace.plan,
+                "role": member.role.value,
+                "member_count": member_counts.get(workspace.id, 1),
+                "payment_provider": providers.get(workspace.id),
+            }
             for member, workspace in memberships
         ],
     )

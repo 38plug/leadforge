@@ -15,8 +15,12 @@ export interface ApiUser {
 export interface AdminWorkspaceRef {
   id: string;
   name: string;
+  /** Belongs to the workspace, not this membership: changing it affects everyone in it. */
   plan: string;
   role: string;
+  member_count: number;
+  /** "stripe" when a real subscription backs the plan, null when it was granted by hand. */
+  payment_provider: string | null;
 }
 
 export interface AdminUser {

@@ -1,17 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ErrorState, SkeletonRows } from "@/components/ui/state";
-import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/lib/use-api";
-import { api, ApiError } from "@/lib/api";
+import { PlanSelect } from "@/components/admin/plan-select";
 import type { AdminWorkspace } from "@/types/api";
-
-const PLANS = ["FREE", "STARTER", "PRO", "AGENCY", "BUSINESS"];
 
 /**
  * Every workspace, with the plan it is on.
@@ -21,57 +15,12 @@ const PLANS = ["FREE", "STARTER", "PRO", "AGENCY", "BUSINESS"];
  * their plan from the Stripe webhook instead, so this screen says which
  * subscriptions are actually backed by a payment provider and which were set
  * by hand.
+ *
+ * The control itself is PlanSelect, shared with the Accounts screen so both
+ * carry the same warnings rather than one copy quietly losing them.
  */
 export function AdminWorkspacesPanel() {
-  const { toast } = useToast();
   const { data, loading, error, refetch } = useApi<AdminWorkspace[]>("/api/admin/workspaces");
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  async function changePlan(workspace: AdminWorkspace, plan: string) {
-    // Granting a paid plan here charges nobody and never renews. Confirming
-    // makes that explicit, because the dropdown looks identical to one that
-    // would take payment.
-    if (plan !== "FREE" && !workspace.payment_provider) {
-      const proceed = window.confirm(
-        `Give ${workspace.name} the ${plan} plan without charging for it?
-
-` +
-          "This grants access immediately and does not create a subscription, so " +
-          "it will not renew or bill. Use it for comped and partnership accounts."
-      );
-      if (!proceed) return;
-    }
-    if (plan === "FREE" && workspace.payment_provider) {
-      const proceed = window.confirm(
-        `${workspace.name} has an active subscription.
-
-` +
-          "Setting them to FREE here removes access but does NOT cancel their " +
-          "subscription in Stripe - they would keep being charged. Cancel it in " +
-          "Stripe instead, and the webhook will move them down automatically."
-      );
-      if (!proceed) return;
-    }
-
-    setBusyId(workspace.id);
-    try {
-      await api.patch(`/api/admin/workspaces/${workspace.id}`, { plan });
-      toast({
-        title: `${workspace.name} moved to ${plan}`,
-        description: "No charge was made.",
-        variant: "success",
-      });
-      refetch();
-    } catch (err) {
-      toast({
-        title: "Plan change refused",
-        description: err instanceof ApiError ? err.message : "Please try again.",
-        variant: "error",
-      });
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (loading) {
     return (
@@ -143,24 +92,14 @@ export function AdminWorkspacesPanel() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={workspace.plan}
-                      onChange={(event) => changePlan(workspace, event.target.value)}
-                      disabled={busyId === workspace.id}
-                      aria-label={`Plan for ${workspace.name}`}
-                      className="w-auto min-w-[120px]"
-                    >
-                      {PLANS.map((plan) => (
-                        <option key={plan} value={plan}>
-                          {plan}
-                        </option>
-                      ))}
-                    </Select>
-                    {busyId === workspace.id && (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-subtle-foreground" />
-                    )}
-                  </div>
+                  <PlanSelect
+                    workspaceId={workspace.id}
+                    workspaceName={workspace.name}
+                    plan={workspace.plan}
+                    memberCount={workspace.member_count}
+                    paymentProvider={workspace.payment_provider}
+                    onChanged={refetch}
+                  />
                 </td>
               </tr>
             ))}

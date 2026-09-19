@@ -176,6 +176,46 @@ def test_an_administrator_can_change_a_workspace_plan(client, superuser, ordinar
     assert response.json()["plan"] == "PRO"
 
 
+def test_an_account_row_says_what_a_plan_change_would_affect(
+    client, superuser, ordinary_user, db_session
+):
+    """The plan belongs to the workspace, not the membership, so changing it
+    from an account row changes it for every member. An admin acting on one
+    person's row has to be able to see that before they act."""
+    from app.models.misc import Subscription
+
+    workspace_id = ordinary_user.memberships[0].workspace_id
+    colleague = User(email="colleague@example.com", hashed_password=hash_password("Pass123456"))
+    db_session.add(colleague)
+    db_session.flush()
+    db_session.add(
+        WorkspaceMember(workspace_id=workspace_id, user_id=colleague.id, role=WorkspaceRole.MEMBER)
+    )
+    db_session.add(Subscription(workspace_id=workspace_id, plan="PRO", status="active", provider="stripe"))
+    db_session.commit()
+
+    rows = client.get("/api/admin/users", headers=bearer(superuser)).json()
+    row = next(r for r in rows if r["email"] == ordinary_user.email)
+    workspace = row["workspaces"][0]
+
+    assert workspace["member_count"] == 2, "an admin must see the change is not one person's"
+    assert workspace["payment_provider"] == "stripe", (
+        "setting a Stripe-backed workspace to FREE here cancels nothing, so the "
+        "interface has to know a subscription exists"
+    )
+
+
+def test_a_comped_workspace_reports_no_payment_provider(client, superuser, ordinary_user):
+    """A plan granted by hand has no provider behind it. Reported as null
+    rather than omitted, so the interface distinguishes 'nobody is paying'
+    from 'we did not look'."""
+    rows = client.get("/api/admin/users", headers=bearer(superuser)).json()
+    row = next(r for r in rows if r["email"] == ordinary_user.email)
+
+    assert row["workspaces"][0]["payment_provider"] is None
+    assert row["workspaces"][0]["member_count"] == 1
+
+
 def test_an_unknown_plan_is_refused(client, superuser, ordinary_user):
     workspace_id = ordinary_user.memberships[0].workspace_id
     response = client.patch(

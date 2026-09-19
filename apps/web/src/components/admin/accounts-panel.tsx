@@ -10,6 +10,7 @@ import { ErrorState, SkeletonRows } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { useApi } from "@/lib/use-api";
 import { api, ApiError } from "@/lib/api";
+import { PlanSelect } from "@/components/admin/plan-select";
 import type { AdminUser } from "@/types/api";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,10 @@ import { cn } from "@/lib/utils";
  * with it, so it is confirmed by typing the email address rather than by a
  * dialog someone can dismiss by reflex. The server enforces the same rules
  * regardless of what this screen allows.
+ *
+ * Plans are edited inline on each workspace chip. The plan is a property of
+ * the workspace rather than of the person, so a change made here lands on
+ * every member of it - PlanSelect says so before it acts.
  */
 export function AdminAccountsPanel({ currentUserId }: { currentUserId: string }) {
   const { toast } = useToast();
@@ -90,7 +95,8 @@ export function AdminAccountsPanel({ currentUserId }: { currentUserId: string })
         <div>
           <CardTitle>Accounts</CardTitle>
           <CardDescription>
-            {data?.length ?? 0} registered across the platform.
+            {data?.length ?? 0} registered across the platform. A plan can be changed from the
+            workspace beside each account — it grants access without taking payment.
           </CardDescription>
         </div>
         <div className="relative w-full sm:w-64">
@@ -133,11 +139,23 @@ export function AdminAccountsPanel({ currentUserId }: { currentUserId: string })
                       {user.workspaces.map((workspace) => (
                         <span
                           key={workspace.id}
-                          className="rounded-sm border border-border bg-background/50 px-1.5 py-0.5 text-2xs text-muted-foreground"
-                          title={`${workspace.role} · ${workspace.plan}`}
+                          className="flex items-center gap-1.5 rounded-sm border border-border bg-background/50 py-0.5 pl-1.5 pr-0.5 text-2xs text-muted-foreground"
+                          title={`${workspace.role} in ${workspace.name}`}
                         >
-                          {workspace.name}
-                          <span className="ml-1 text-subtle-foreground">{workspace.plan}</span>
+                          <span className="max-w-[10rem] truncate">{workspace.name}</span>
+                          {/* The plan sits on the workspace, so this is the
+                              same control as the Workspaces tab, acting on the
+                              same thing. Editing it here saves an admin
+                              looking up which workspace a person belongs to. */}
+                          <PlanSelect
+                            compact
+                            workspaceId={workspace.id}
+                            workspaceName={workspace.name}
+                            plan={workspace.plan}
+                            memberCount={workspace.member_count}
+                            paymentProvider={workspace.payment_provider}
+                            onChanged={refetch}
+                          />
                         </span>
                       ))}
                     </div>
