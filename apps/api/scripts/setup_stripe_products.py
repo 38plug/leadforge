@@ -49,6 +49,15 @@ PLANS = [
 
 CURRENCY = "usd"
 
+# Stripe requires a tax code on every product sold through Managed Payments,
+# which is on by default for new accounts. Without it, creating a Checkout
+# Session fails outright - so this is not optional metadata.
+#
+# LeadForge is software sold to businesses, so "SaaS - business use" is the
+# correct classification. Getting this wrong misreports tax rather than
+# failing loudly, which is why it is stated rather than guessed.
+SAAS_BUSINESS_TAX_CODE = "txcd_10103001"
+
 
 def secret_key() -> str:
     import os
@@ -118,6 +127,7 @@ def main() -> None:
                 params={
                     "name": spec["name"],
                     "description": spec["description"],
+                    "tax_code": SAAS_BUSINESS_TAX_CODE,
                     # Lets the webhook and the admin screen tie a Stripe object
                     # back to a plan without a hard-coded id table.
                     "metadata": {"leadforge_plan": spec["plan"]},
