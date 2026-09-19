@@ -590,41 +590,65 @@ class OSMBusinessProvider(BusinessSearchProvider):
         return None
 
 
-# Nominatim understands "special phrases" - plain words like "restaurants" or
-# "hairdressers" that map onto OSM tags. Niches are translated to the phrase
-# Nominatim recognises; anything unmapped is passed through, since an unknown
-# word still matches against business names.
-_NOMINATIM_NICHE_PHRASES: dict[str, str] = {
-    "restaurant": "restaurants",
-    "cafe": "cafes",
-    "barber": "hairdressers",
-    "beauty salon": "beauty shops",
-    "dentist": "dentists",
-    "dental clinic": "dentists",
-    "medical clinic": "clinics",
-    "gym": "gyms",
-    "fitness": "gyms",
-    "hotel": "hotels",
-    "real estate": "estate agents",
-    "auto repair": "car repair shops",
-    "plumber": "plumbers",
-    "electrician": "electricians",
-    "law firm": "lawyers",
-    "accountant": "accountants",
-    "photographer": "photographers",
-    "construction": "builders",
-    "cleaning": "cleaners",
-    "retail": "shops",
-    "professional services": "offices",
+# Nominatim answers a category search only for phrases it recognises, and the
+# vocabulary is narrower than it looks. Every phrase below was checked against
+# central Berlin - dense and well mapped, so a phrase finding nothing there is
+# the phrase failing rather than the area being empty.
+#
+# Several plausible-sounding phrases return nothing at all: "gyms",
+# "plumbers", "accountants", "lawyers", "estate agents", "builders",
+# "cleaning services", "car repair shops". They are listed here as a warning
+# against reintroducing them.
+#
+# Each niche maps to a list, tried in order until one produces results, so a
+# phrase that works in one region can be backed by an alternative elsewhere.
+_NOMINATIM_NICHE_PHRASES: dict[str, tuple[str, ...]] = {
+    "restaurant": ("restaurants",),
+    "cafe": ("cafes", "coffee"),
+    "barber": ("hairdressers", "barbers"),
+    "beauty salon": ("beauty shops", "hairdressers"),
+    "dentist": ("dentists",),
+    "dental clinic": ("dentists",),
+    "medical clinic": ("clinics", "doctors"),
+    # "gyms" and "fitness centres" both return nothing; sports centres is the
+    # phrase OSM's data actually answers to.
+    "gym": ("sports centres", "fitness"),
+    "fitness": ("sports centres", "fitness"),
+    "hotel": ("hotels", "guest houses"),
+    # "car repair shops" returns nothing; the singular and plural without
+    # "shops" both work.
+    "auto repair": ("car repairs", "car repair"),
+    "photographer": ("photographers", "photo shops"),
+    # "laundries" is the closest category OSM records. It is a narrower trade
+    # than general cleaning, so it is offered rather than pretended to be the
+    # same thing.
+    "cleaning": ("laundries",),
+    "retail": ("supermarkets", "convenience stores", "clothes shops"),
+    "e-commerce": ("offices",),
+    "professional services": ("offices",),
+    "electrician": ("electricians", "electronics shops"),
 }
 
+# Niches OSM records but Nominatim's phrase search cannot reach. Every phrase
+# tried for these returned nothing, in every wording. They are still findable
+# through Overpass, which queries tags directly (office=lawyer, craft=plumber,
+# office=estate_agent), and Overpass runs whenever a city is given - so these
+# work in a city search and not in a country-wide one. Naming them lets the
+# search say so instead of returning an empty list that reads as "no such
+# businesses exist here".
+NICHES_NEEDING_A_CITY = frozenset(
+    {
+        "plumber",
+        "accountant",
+        "law firm",
+        "real estate",
+        "construction",
+    }
+)
+
 # With no niche chosen there is no single phrase meaning "any business", so a
-# few broad ones are merged. Kept short: each is a separate request, and
-# Nominatim's usage policy asks for no more than one per second.
-# Every phrase here must be one Nominatim recognises as a category. A generic
-# word like "shops" is also matched against business names, which returned
-# companies literally called "Small-Shops" and "HB Shops" rather than shops.
-_NOMINATIM_ANY_BUSINESS_PHRASES = ("restaurants", "cafes", "hairdressers")
+# few verified ones are merged. Each is a category Nominatim answers to.
+_NOMINATIM_ANY_BUSINESS_PHRASES = ("restaurants", "cafes", "hairdressers", "supermarkets")
 
 
 class NominatimBusinessProvider(BusinessSearchProvider):
@@ -657,9 +681,20 @@ class NominatimBusinessProvider(BusinessSearchProvider):
         self._expected_country_code: str | None = None
 
     def _phrases_for_niche(self, niche: str | None) -> tuple[str, ...]:
+        """Phrases to try for a niche, in order.
+
+        An unmapped niche falls through to its own text, which still matches
+        business names even when it is not a category Nominatim knows.
+        """
         if not niche:
             return _NOMINATIM_ANY_BUSINESS_PHRASES
-        return (_NOMINATIM_NICHE_PHRASES.get(niche.strip().lower(), niche.strip()),)
+        key = niche.strip().lower()
+        return _NOMINATIM_NICHE_PHRASES.get(key, (niche.strip(),))
+
+    @staticmethod
+    def needs_a_city(niche: str | None) -> bool:
+        """True when this niche is only reachable through a city search."""
+        return bool(niche) and niche.strip().lower() in NICHES_NEEDING_A_CITY
 
     def _place_bbox(self, city: str | None, country: str | None) -> GeocodeResult | None:
         """Resolve the area to search.

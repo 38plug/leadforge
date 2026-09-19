@@ -322,7 +322,11 @@ export default function DiscoverPage() {
               <EmptyState
                 icon={Globe2}
                 title="No businesses matched"
-                description="The search completed, but nothing in this area matched your filters. Try fewer requirements, a different industry, or a nearby larger city."
+                description={
+                  searchedLocation && !city.trim()
+                    ? "The search completed, but nothing matched. Some trades — plumbers, accountants, law firms — are recorded in OpenStreetMap but can only be reached by searching a specific city. Add one and try again."
+                    : "The search completed, but nothing in this area matched your filters. Try fewer requirements, a different industry, or a nearby larger city."
+                }
               />
             )}
 
