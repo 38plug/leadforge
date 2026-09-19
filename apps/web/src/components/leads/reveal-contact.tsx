@@ -1,0 +1,192 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { Phone, Mail, Globe, MapPin, Lock, Loader2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+interface RevealedContact {
+  lead_id: string;
+  phone: string | null;
+  email: string | null;
+  maps_url: string | null;
+  website: string | null;
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+/**
+ * Unlocks one lead's contact details, spending one of the plan's leads.
+ *
+ * The details are genuinely absent from the API response until this is
+ * clicked - they are not merely blurred - so the placeholder below stands in
+ * for data the browser has never received. That is what makes the limit real
+ * rather than a CSS effect anyone can inspect their way around.
+ *
+ * Unlocking the same lead again is free, so a user who returns to a lead they
+ * already opened is not charged twice.
+ */
+export function RevealContact({
+  leadId,
+  revealed,
+  phone,
+  email,
+  website,
+  mapsUrl,
+  onRevealed,
+}: {
+  leadId: string;
+  revealed: boolean;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  mapsUrl?: string | null;
+  /** Lets the page refresh its own copy of the lead and the usage meter. */
+  onRevealed?: (contact: RevealedContact) => void;
+}) {
+  const { toast } = useToast();
+  const [unlocking, setUnlocking] = useState(false);
+  const [contact, setContact] = useState<RevealedContact | null>(null);
+  const [quotaSpent, setQuotaSpent] = useState<{ limit: number; plan: string } | null>(null);
+
+  const isOpen = revealed || contact !== null;
+  const shownPhone = contact?.phone ?? phone ?? null;
+  const shownEmail = contact?.email ?? email ?? null;
+  const shownWebsite = contact?.website ?? website ?? null;
+  const shownMaps = contact?.maps_url ?? mapsUrl ?? null;
+
+  async function unlock() {
+    setUnlocking(true);
+    try {
+      const result = await api.post<RevealedContact>(`/api/leads/${leadId}/reveal`);
+      setContact(result);
+      onRevealed?.(result);
+      if (result.remaining <= 5) {
+        toast({
+          title: `${result.remaining} leads left this month`,
+          description: "Your allowance resets on the first of the month.",
+          variant: "info",
+        });
+      }
+    } catch (err) {
+      // 402 is the allowance being spent, which is a different situation from
+      // a failure and gets its own explanation rather than a red toast.
+      if (err instanceof ApiError && err.status === 402) {
+        const detail = err.message as unknown as { limit?: number; plan?: string } | string;
+        setQuotaSpent(
+          typeof detail === "object"
+            ? { limit: detail.limit ?? 0, plan: detail.plan ?? "your" }
+            : { limit: 0, plan: "your" }
+        );
+      } else {
+        toast({
+          title: "Couldn't unlock this lead",
+          description: err instanceof ApiError ? err.message : "Please try again.",
+          variant: "error",
+        });
+      }
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
+  if (quotaSpent) {
+    return (
+      <div className="rounded-lg border border-warning/25 bg-warning/[0.07] p-4">
+        <p className="flex items-center gap-2 text-[13px] font-medium text-warning">
+          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+          You&apos;ve unlocked every lead included this month
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+          Your allowance resets on the first of the month. Leads you have already unlocked stay
+          readable — nothing is taken away.
+        </p>
+        <Button asChild size="sm" className="mt-3">
+          <Link href="/settings?tab=billing">
+            <Sparkles className="h-3.5 w-3.5" />
+            Upgrade for a larger allowance
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  if (!isOpen) {
+    return (
+      <div className="rounded-lg border border-border bg-background/40 p-4">
+        <div className="flex flex-col gap-2" aria-hidden="true">
+          {/* Placeholders, not blurred data: the browser has never received
+              these values, so there is nothing here to inspect. */}
+          {["w-40", "w-52", "w-32"].map((width) => (
+            <div key={width} className={cn("h-3.5 rounded bg-muted", width)} />
+          ))}
+        </div>
+        <div className="mt-3.5 flex flex-wrap items-center gap-2 border-t border-border pt-3.5">
+          <Button size="sm" onClick={unlock} disabled={unlocking}>
+            {unlocking ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Lock className="h-3.5 w-3.5" />
+            )}
+            {unlocking ? "Unlocking..." : "Unlock contact details"}
+          </Button>
+          <span className="text-2xs text-subtle-foreground">
+            Uses one lead from your monthly allowance
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const rows = [
+    { icon: Phone, label: "Phone", value: shownPhone, href: shownPhone ? `tel:${shownPhone}` : null },
+    { icon: Mail, label: "Email", value: shownEmail, href: shownEmail ? `mailto:${shownEmail}` : null },
+    { icon: Globe, label: "Website", value: shownWebsite, href: shownWebsite ?? null },
+    { icon: MapPin, label: "Map", value: shownMaps ? "Open in maps" : null, href: shownMaps ?? null },
+  ].filter((row) => row.value);
+
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-4">
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          This business publishes no contact details. That is common for the ones most in need of a
+          web presence — and it is why the address and map are worth having.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {rows.map((row) => {
+            const Icon = row.icon;
+            return (
+              <li key={row.label} className="flex items-center gap-2.5 text-[13px]">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden="true" />
+                <span className="w-16 shrink-0 text-2xs text-subtle-foreground">{row.label}</span>
+                {row.href ? (
+                  <a
+                    href={row.href}
+                    target={row.href.startsWith("http") ? "_blank" : undefined}
+                    rel="noreferrer"
+                    className="min-w-0 truncate transition-colors hover:text-primary"
+                  >
+                    {row.value}
+                  </a>
+                ) : (
+                  <span className="min-w-0 truncate">{row.value}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {contact && (
+        <p className="mt-3 border-t border-border pt-2.5 text-2xs text-subtle-foreground">
+          <span className="numeric">{contact.remaining}</span> of{" "}
+          <span className="numeric">{contact.limit}</span> leads left this month
+        </p>
+      )}
+    </div>
+  );
+}

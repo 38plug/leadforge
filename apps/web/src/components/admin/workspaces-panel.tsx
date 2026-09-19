@@ -28,6 +28,31 @@ export function AdminWorkspacesPanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function changePlan(workspace: AdminWorkspace, plan: string) {
+    // Granting a paid plan here charges nobody and never renews. Confirming
+    // makes that explicit, because the dropdown looks identical to one that
+    // would take payment.
+    if (plan !== "FREE" && !workspace.payment_provider) {
+      const proceed = window.confirm(
+        `Give ${workspace.name} the ${plan} plan without charging for it?
+
+` +
+          "This grants access immediately and does not create a subscription, so " +
+          "it will not renew or bill. Use it for comped and partnership accounts."
+      );
+      if (!proceed) return;
+    }
+    if (plan === "FREE" && workspace.payment_provider) {
+      const proceed = window.confirm(
+        `${workspace.name} has an active subscription.
+
+` +
+          "Setting them to FREE here removes access but does NOT cancel their " +
+          "subscription in Stripe - they would keep being charged. Cancel it in " +
+          "Stripe instead, and the webhook will move them down automatically."
+      );
+      if (!proceed) return;
+    }
+
     setBusyId(workspace.id);
     try {
       await api.patch(`/api/admin/workspaces/${workspace.id}`, { plan });
@@ -97,11 +122,24 @@ export function AdminWorkspacesPanel() {
                 <td className="numeric px-4 py-3 text-xs">{workspace.lead_count.toLocaleString()}</td>
                 <td className="px-4 py-3">
                   {workspace.payment_provider ? (
-                    <Badge variant="success" dot>
-                      {workspace.subscription_status ?? "active"}
-                    </Badge>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant="success" dot>
+                        {workspace.subscription_status ?? "active"}
+                      </Badge>
+                      <span className="text-2xs text-subtle-foreground">
+                        via {workspace.payment_provider}
+                      </span>
+                    </div>
+                  ) : workspace.plan !== "FREE" ? (
+                    // A paid plan with no provider behind it was granted by
+                    // hand. Worth distinguishing: it will never renew, and
+                    // nobody is being charged for it.
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant="warning" dot>Comped</Badge>
+                      <span className="text-2xs text-subtle-foreground">no payment</span>
+                    </div>
                   ) : (
-                    <span className="text-2xs text-subtle-foreground">Not paying</span>
+                    <span className="text-2xs text-subtle-foreground">Free plan</span>
                   )}
                 </td>
                 <td className="px-4 py-3">

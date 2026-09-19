@@ -54,7 +54,6 @@ export default function DiscoverPage() {
   const [niche, setNiche] = useState("");
   const [customNiche, setCustomNiche] = useState("");
   const [websiteStatus, setWebsiteStatus] = useState<WebsiteStatus | "ANY">("ANY");
-  const [minRating, setMinRating] = useState(0);
   const [minScore, setMinScore] = useState(0);
   const [requirePhone, setRequirePhone] = useState(false);
   const [requireEmail, setRequireEmail] = useState(false);
@@ -97,7 +96,6 @@ export default function DiscoverPage() {
       niche: niche || undefined,
       custom_niche: customNiche || undefined,
       website_status: websiteStatus !== "ANY" ? websiteStatus : undefined,
-      min_rating: minRating || undefined,
       min_score: minScore || undefined,
       require_phone: requirePhone,
       require_email: requireEmail,
@@ -220,19 +218,11 @@ export default function DiscoverPage() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <label className="label-caps" htmlFor="min-rating">Minimum rating</label>
-              <Input
-                id="min-rating"
-                type="number"
-                min={0}
-                max={5}
-                step={0.1}
-                value={minRating || ""}
-                placeholder="e.g. 4.0"
-                onChange={(e) => setMinRating(Number(e.target.value) || 0)}
-              />
-            </div>
+            {/* A minimum-rating filter used to sit here. It was removed rather
+                than disabled: OpenStreetMap does not record ratings or review
+                counts, so the control was only implemented by the mock
+                provider and silently changed nothing against real data. A
+                filter that does nothing is worse than no filter. */}
 
             <div className="flex flex-col gap-2">
               <span className="label-caps">Must have</span>

@@ -64,9 +64,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       .catch(() => setUsage(null));
   }, [workspace]);
 
-  const limit = PLAN_LIMITS[workspace?.plan ?? "FREE"] ?? 50;
-  const used = usage?.lead_searches ?? 0;
-  const pct = Math.min(100, Math.round((used / limit) * 100));
+  // The metered unit is leads unlocked, not searches run. The limit comes from
+  // the API rather than the local table, so the two cannot disagree about a
+  // plan - the local map is only a fallback while usage is still loading.
+  const limit = usage?.lead_reveals_limit ?? PLAN_LIMITS[workspace?.plan ?? "FREE"] ?? 50;
+  const used = usage?.lead_reveals ?? 0;
+  const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 
   return (
     <aside
@@ -139,7 +142,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             href="/settings?tab=billing"
             onClick={onNavigate}
-            aria-label={`Workspace usage: ${used} of ${limit} searches used. Open billing.`}
+            aria-label={`Workspace usage: ${used} of ${limit} leads unlocked. Open billing.`}
             className="surface surface-interactive block rounded-lg p-3"
           >
             <div className="flex items-center justify-between gap-2">
@@ -150,7 +153,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
             <div className="mt-2.5 space-y-1.5">
               <div className="flex items-center justify-between text-2xs text-muted-foreground">
-                <span>Searches</span>
+                <span>Leads unlocked</span>
                 <span className="numeric">
                   {used.toLocaleString()} / {limit.toLocaleString()}
                 </span>
@@ -161,7 +164,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 aria-valuenow={pct}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label="Lead searches used"
+                aria-label="Leads unlocked"
               >
                 <div className="h-full rounded-full bg-primary/80" style={{ width: `${pct}%` }} />
               </div>

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { RevealContact } from "@/components/leads/reveal-contact";
 import { LeadStatusBadge, ScorePill, WebsiteStatusBadge } from "@/components/leads/badges";
 import { LoadingState, ErrorState } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
@@ -379,14 +380,26 @@ export default function LeadDetailPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Contact Information</CardTitle>
+              <CardTitle>Contact details</CardTitle>
+              <CardDescription>
+                Phone, email and the exact location. Unlocking uses one lead from your monthly
+                allowance; opening this lead again later is free.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              <Row label="Phone" value={lead.phone} />
-              <Row label="Email" value={lead.email} />
-              <Row label="Website" value={lead.website} />
-              <Row label="Instagram" value={lead.social.instagram ? `@${lead.social.instagram}` : undefined} />
-              <Row label="Source" value={lead.source} />
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <RevealContact
+                leadId={lead.id}
+                revealed={Boolean(leadRaw?.contact_revealed)}
+                phone={lead.phone}
+                email={lead.email}
+                website={lead.website}
+                mapsUrl={lead.mapsUrl}
+                onRevealed={() => refetch()}
+              />
+              <div className="flex flex-col gap-2">
+                <Row label="Instagram" value={lead.social.instagram ? `@${lead.social.instagram}` : undefined} />
+                <Row label="Source" value={lead.source} />
+              </div>
             </CardContent>
           </Card>
 

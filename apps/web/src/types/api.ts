@@ -130,6 +130,9 @@ export interface ApiCompany {
 }
 
 export interface ApiLead {
+  /** False until this workspace unlocks the lead. While false the contact
+   *  fields are absent from the response, not merely hidden. */
+  contact_revealed?: boolean;
   id: string;
   workspace_id: string;
   company: ApiCompany;

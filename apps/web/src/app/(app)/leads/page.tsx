@@ -238,8 +238,8 @@ export default function LeadsPage() {
                   <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("company")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Company<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
                   <th scope="col" className="label-caps px-4 py-2.5">Niche</th>
                   <th scope="col" className="label-caps px-4 py-2.5">Location</th>
-                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("rating")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Rating<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
-                  <th scope="col" className="px-4 py-2.5"><button type="button" onClick={() => toggleSort("reviews")} className="label-caps flex items-center gap-1 transition-colors hover:text-foreground">Reviews<ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" /></button></th>
+                  
+                  
                   <th scope="col" className="label-caps px-4 py-2.5">Website</th>
                   <th scope="col" className="label-caps px-4 py-2.5">Phone</th>
                   <th scope="col" className="label-caps px-4 py-2.5">Email</th>
@@ -265,8 +265,8 @@ export default function LeadsPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{lead.niche}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{lead.city}, {lead.country}</td>
-                    <td className="numeric px-4 py-3 text-xs">{lead.rating ?? "—"}</td>
-                    <td className="numeric px-4 py-3 text-xs">{lead.reviews ? formatNumber(lead.reviews) : "—"}</td>
+                    
+                    
                     <td className="px-4 py-3"><WebsiteStatusBadge status={lead.websiteStatus} /></td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{lead.phone ?? "—"}</td>
                     <td className="max-w-[180px] truncate px-4 py-3 text-xs text-muted-foreground">{lead.email ?? "—"}</td>
