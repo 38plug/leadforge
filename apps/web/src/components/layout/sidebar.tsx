@@ -56,13 +56,17 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     });
   }
 
+  // Refetched on navigation as well as when the session reloads: unlocking a
+  // lead spends allowance, and a meter that only updates on a full page load
+  // is a meter nobody trusts. `workspace` is a new object after every session
+  // refresh, so a plan comped by an admin pulls the new limit in here too.
   useEffect(() => {
     if (!workspace) return;
     api
       .get<ApiUsage>("/api/workspace/usage")
       .then(setUsage)
       .catch(() => setUsage(null));
-  }, [workspace]);
+  }, [workspace, pathname]);
 
   // The metered unit is leads unlocked, not searches run. The limit comes from
   // the API rather than the local table, so the two cannot disagree about a
@@ -74,6 +78,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // full bar with credits left still means "this week's included leads are
   // gone", which is a different thing from "you cannot open another lead".
   const credits = usage?.credit_balance ?? 0;
+  // Usage is refetched independently of the session, so its plan is the
+  // fresher of the two. The cached workspace is only a fallback for the
+  // moment before usage arrives.
+  const plan = usage?.plan ?? workspace?.plan ?? "FREE";
   const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 
   return (
@@ -157,7 +165,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <div className="flex items-center justify-between gap-2">
               <p className="truncate text-xs font-medium">{workspace?.name ?? "Workspace"}</p>
               <span className="shrink-0 rounded-sm border border-primary/25 bg-primary/12 px-1.5 py-0.5 text-2xs font-semibold text-primary">
-                {workspace?.plan ?? "FREE"}
+                {plan}
               </span>
             </div>
             <div className="mt-2.5 space-y-1.5">

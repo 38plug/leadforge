@@ -522,3 +522,135 @@ def test_a_successful_response_clears_an_earlier_failure():
     OSMBusinessProvider._record_mirror_success(url)
     assert url not in OSMBusinessProvider._mirror_failed_at
     assert provider._mirrors_in_rotation()[0] == url
+
+
+# --- country-wide search -------------------------------------------------
+# Some trades exist in OpenStreetMap only as tags, with no Nominatim phrase
+# that finds them, so a country-wide search for them used to return nothing
+# at all. They are sparse enough to scan a whole country through an Overpass
+# area query; dense categories are not, and must still decline.
+
+
+def _overpass_returning(elements):
+    """A patched httpx.Client whose POST returns these Overpass elements."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"elements": elements}
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_client = MagicMock()
+    mock_client.post.return_value = mock_response
+    return mock_client
+
+
+def test_a_sparse_trade_is_searchable_across_a_whole_country():
+    """The reported bug: country + "plumber" with no city found nothing, and
+    said so in a way that read as "there are no plumbers in Portugal"."""
+    provider = OSMBusinessProvider()
+    elements = [
+        {"type": "node", "id": 7, "lat": 38.7, "lon": -9.1, "tags": {"name": "Pichelaria Loureiro"}}
+    ]
+    with patch.object(provider, "_country_code", return_value="PT"):
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value = _overpass_returning(elements)
+            results = provider.search(
+                BusinessSearchFilters(country="Portugal", niche="plumber", limit=25)
+            )
+
+    assert [r.name for r in results] == ["Pichelaria Loureiro"]
+
+
+def test_a_country_wide_search_does_not_invent_a_city():
+    """These results genuinely have no city unless the business tagged one.
+    Filling it with the country name would read as a real address."""
+    provider = OSMBusinessProvider()
+    elements = [{"type": "node", "id": 8, "lat": 38.7, "lon": -9.1, "tags": {"name": "ACM"}}]
+    with patch.object(provider, "_country_code", return_value="PT"):
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client_cls.return_value.__enter__.return_value = _overpass_returning(elements)
+            results = provider.search(BusinessSearchFilters(country="Portugal", niche="law firm"))
+
+    assert results[0].city == ""
+    assert results[0].country == "Portugal"
+    assert "38.7" in (results[0].maps_url or ""), "without a city, the coordinates are what locate it"
+
+
+def test_a_dense_niche_declines_the_country_wide_scan():
+    """A country-wide scan for restaurants does not complete. Attempting it
+    would spend the whole budget before the source that CAN answer is tried,
+    so this path has to hand over rather than try and fail."""
+    provider = OSMBusinessProvider()
+    with patch("httpx.Client") as mock_client_cls:
+        results = provider.search(BusinessSearchFilters(country="Portugal", niche="restaurant"))
+
+    assert results == []
+    mock_client_cls.assert_not_called(), "no request should be made at all"
+
+
+def test_any_industry_still_declines_a_country_wide_scan():
+    provider = OSMBusinessProvider()
+    with patch("httpx.Client") as mock_client_cls:
+        assert provider.search(BusinessSearchFilters(country="Portugal", niche=None)) == []
+    mock_client_cls.assert_not_called()
+
+
+def test_a_country_wide_scan_gets_one_long_attempt_not_four_short_ones():
+    """Splitting the budget evenly gave each mirror ~20s against a query
+    measured at 33s, so every mirror timed out and a working query was
+    reported as an outage."""
+    provider = OSMBusinessProvider()
+
+    with patch.object(provider, "_country_code", return_value="PT"):
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.post.side_effect = TimeoutError("read timed out")
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+            with pytest.raises(ProviderError):
+                provider.search(BusinessSearchFilters(country="Portugal", niche="plumber"))
+
+    # The per-attempt timeout is set on the client, not on the request.
+    timeouts = [call.kwargs["timeout"] for call in mock_client_cls.call_args_list]
+    assert timeouts, "at least one mirror must be tried"
+    assert timeouts[0] >= 40, f"an attempt too short to finish is wasted: {timeouts}"
+
+
+def test_a_city_search_still_prefers_several_short_attempts():
+    """The long-attempt rule is for country scans only. A city query answers
+    in seconds, so spending the budget on one slow mirror instead of trying
+    four would make an ordinary search hostage to one bad instance."""
+    provider = OSMBusinessProvider()
+
+    with patch.object(
+        provider, "_geocode", return_value=GeocodeResult(bbox=(52.4, 13.3, 52.6, 13.5))
+    ):
+        with patch("httpx.Client") as mock_client_cls:
+            mock_client = MagicMock()
+            mock_client.post.side_effect = TimeoutError("read timed out")
+            mock_client_cls.return_value.__enter__.return_value = mock_client
+            with pytest.raises(ProviderError):
+                provider.search(BusinessSearchFilters(city="Berlin", country="Germany", niche="cafe"))
+
+    timeouts = [call.kwargs["timeout"] for call in mock_client_cls.call_args_list]
+    assert len(timeouts) == 4, "every mirror should get a turn on a cheap query"
+    # The first attempt is the honest comparison: later ones inherit budget a
+    # real (slow) failure would have consumed, which a mock raising instantly
+    # does not.
+    assert timeouts[0] < 30, f"a city query should not commit the budget to one mirror: {timeouts}"
+
+
+def test_the_country_query_omits_the_name_filter():
+    """Measured at 18 of 50 seconds for Portugal, and it changes nothing: the
+    result loop already skips unnamed elements."""
+    provider = OSMBusinessProvider()
+    query = provider._country_area_query("pt", [("craft", "plumber")], 75, 55)
+
+    assert '["name"]' not in query
+    assert 'area["ISO3166-1"="PT"][admin_level=2]' in query
+    assert "nwr(area.searchArea)" in query
+
+
+def test_an_unresolvable_country_hands_over_rather_than_scanning():
+    provider = OSMBusinessProvider()
+    with patch.object(provider, "_country_code", return_value=None):
+        with patch("httpx.Client") as mock_client_cls:
+            assert provider.search(BusinessSearchFilters(country="Atlantis", niche="plumber")) == []
+    mock_client_cls.assert_not_called()

@@ -56,6 +56,33 @@ MIRROR_COOLDOWN_SECONDS = 300.0
 # still being somewhere rather than everywhere.
 MAX_COUNTRY_SPAN_DEGREES = 24.0
 
+# Trades that exist in OpenStreetMap as tags (craft=plumber, office=lawyer)
+# but that Nominatim has no working special phrase for, so the country-wide
+# Nominatim path returns nothing for them however the query is worded.
+#
+# They are sparse enough to query across a whole country through an Overpass
+# area lookup, which a dense category like "restaurant" is not - measured at
+# 33s for Portugal and 38s for Brazil, against a request that would not
+# complete at all for restaurants.
+COUNTRY_WIDE_OVERPASS_NICHES = frozenset(
+    {"plumber", "accountant", "law firm", "real estate", "construction"}
+)
+
+# A country-wide scan is genuinely slower than a city one, so it gets its own
+# budget. Kept under 90s deliberately: the request still has to return through
+# a hosting proxy while someone is watching a spinner, and a search that dies
+# at the proxy looks like a broken product rather than a slow one. Countries
+# too large to answer inside it (the United States measured at ~114s) fall
+# back to the honest "add a city" message.
+COUNTRY_WIDE_BUDGET_SECONDS = 85.0
+
+# One country-wide attempt has to be long enough to actually finish. Measured
+# against the live mirrors: Portugal 33s, Brazil 38s, Germany 71s. Splitting
+# the budget evenly across four mirrors gave each 20s and every one timed out,
+# so a query that works was reported as an outage. Two real attempts beat four
+# doomed ones, which is what this floor buys.
+COUNTRY_WIDE_MIN_ATTEMPT_SECONDS = 42.0
+
 OVERFETCH_FACTOR = 3
 MAX_OVERPASS_LIMIT = 300
 
@@ -367,6 +394,117 @@ class OSMBusinessProvider(BusinessSearchProvider):
         # holding the connection open until the client gives up.
         return f"[out:json][timeout:{server_budget_seconds}];\n(\n{clauses});\nout center {limit};"
 
+    def _country_wide_search(
+        self,
+        filters: BusinessSearchFilters,
+        tags: list[tuple[str, str | None]],
+        overpass_limit: int,
+    ) -> list[dict] | None:
+        """Scan a whole country for a sparse trade, or decline to.
+
+        Returns a list of Overpass elements when this path applies, and None
+        when it does not - which hands the search on to Nominatim rather than
+        reporting an empty country.
+
+        The restriction to sparse niches is not caution for its own sake. A
+        country-wide scan for "restaurant" does not complete, and an Overpass
+        request that dies at its timeout costs the user the whole budget
+        before the source that could have answered is even tried.
+        """
+        niche = (filters.niche or "").strip().lower()
+        if niche not in COUNTRY_WIDE_OVERPASS_NICHES:
+            logger.info(
+                "Overpass skipped: %r is too common to scan a whole country",
+                filters.niche or "any industry",
+            )
+            return None
+
+        if not filters.country:
+            # Without a country there is no area to select, and scanning the
+            # planet is not a query any public instance will answer.
+            return None
+
+        country_code = self._country_code(filters.country)
+        if not country_code:
+            logger.info("Overpass skipped: no ISO code for country=%r", filters.country)
+            return None
+
+        logger.info(
+            "Overpass country-wide scan: niche=%r country=%s", filters.niche, country_code
+        )
+        return self._run_overpass(
+            lambda server_budget: self._country_area_query(
+                country_code, tags, overpass_limit, server_budget
+            ),
+            budget_seconds=COUNTRY_WIDE_BUDGET_SECONDS,
+            min_attempt_seconds=COUNTRY_WIDE_MIN_ATTEMPT_SECONDS,
+            max_attempt_seconds=COUNTRY_WIDE_MIN_ATTEMPT_SECONDS,
+        )
+
+    def _country_area_query(
+        self,
+        country_code: str,
+        tags: list[tuple[str, str | None]],
+        limit: int,
+        server_budget_seconds: int,
+    ) -> str:
+        """An Overpass query covering a whole country rather than a bbox.
+
+        Uses the ISO country code to select the administrative area, which is
+        what makes this possible at all: a bounding box round a country is
+        clamped to ~25km elsewhere in this file because a dense tag cannot be
+        scanned over that span. These tags are sparse enough that the area
+        itself can be.
+        """
+        clauses: list[str] = []
+        for key, value in tags:
+            if value is None:
+                selector = f'["{key}"]'
+            elif "|" in value:
+                selector = f'["{key}"~"^({value})$"]'
+            else:
+                selector = f'["{key}"="{value}"]'
+            # No ["name"] filter here, unlike the bbox query. Measured against
+            # Portugal it costs 18 of 50 seconds and changes nothing: the same
+            # 25 named businesses come back either way, and the result loop
+            # already skips anything unnamed. On a country-wide scan that
+            # difference is the margin between answering and timing out.
+            clauses.append(f"  nwr(area.searchArea){selector};")
+        return "\n".join(
+            [
+                f"[out:json][timeout:{server_budget_seconds}];",
+                f'area["ISO3166-1"="{country_code.upper()}"][admin_level=2]->.searchArea;',
+                "(",
+                *clauses,
+                ");",
+                f"out center {limit};",
+            ]
+        )
+
+    def _country_code(self, country: str) -> str | None:
+        """The ISO 3166-1 alpha-2 code for a country name, via Nominatim.
+
+        Looked up rather than held in a table here: a table would need every
+        spelling, translation and abbreviation a user might type, and would be
+        wrong for exactly the countries nobody thought to test.
+        """
+        self._respect_nominatim_rate_limit()
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
+                response = client.get(
+                    self.NOMINATIM_URL,
+                    params={"q": country, "format": "json", "limit": 1, "addressdetails": 1},
+                )
+                response.raise_for_status()
+                results = response.json()
+        except Exception as exc:  # noqa: BLE001 - a free service must not crash a search
+            logger.warning("Could not resolve a country code for %r: %s", country, exc)
+            return None
+        if not results:
+            return None
+        code = ((results[0].get("address") or {}).get("country_code") or "").strip()
+        return code.upper() or None
+
     def _mirrors_in_rotation(self) -> tuple[str, ...]:
         """The mirrors to try, healthy ones first.
 
@@ -404,7 +542,13 @@ class OSMBusinessProvider(BusinessSearchProvider):
     def _record_mirror_success(cls, url: str) -> None:
         cls._mirror_failed_at.pop(url, None)
 
-    def _run_overpass(self, build_query: Callable[[int], str]) -> list[dict]:
+    def _run_overpass(
+        self,
+        build_query: Callable[[int], str],
+        budget_seconds: float | None = None,
+        min_attempt_seconds: float = MIN_MIRROR_ATTEMPT_SECONDS,
+        max_attempt_seconds: float | None = None,
+    ) -> list[dict]:
         """Ask Overpass mirrors in turn, returning the first real answer.
 
         The mirrors share one wall-clock budget (`total_budget_seconds`), so a
@@ -418,14 +562,19 @@ class OSMBusinessProvider(BusinessSearchProvider):
         every mirror has failed this raises rather than returning [].
         """
         failures: list[str] = []
-        deadline = time.monotonic() + self.total_budget_seconds
+        # A country-wide scan is legitimately slower than a city one and passes
+        # its own budget; everything else uses the shared interactive one.
+        budget = budget_seconds or self.total_budget_seconds
+        deadline = time.monotonic() + budget
         mirrors = self._mirrors_in_rotation()
+
+        attempt_ceiling = max_attempt_seconds or self.timeout_seconds
 
         for index, url in enumerate(mirrors):
             remaining = deadline - time.monotonic()
-            if remaining < MIN_MIRROR_ATTEMPT_SECONDS:
+            if remaining < min_attempt_seconds:
                 skipped = mirrors[index:]
-                failures.append(f"{len(skipped)} mirror(s) skipped — {self.total_budget_seconds:.0f}s budget spent")
+                failures.append(f"{len(skipped)} mirror(s) skipped — {budget:.0f}s budget spent")
                 logger.info("Overpass budget exhausted; skipping %s", ", ".join(skipped))
                 break
 
@@ -434,10 +583,17 @@ class OSMBusinessProvider(BusinessSearchProvider):
             # instance eat the whole budget and leave a healthy mirror further
             # down the list untried — the common case, since at any moment
             # some of these volunteer instances are unresponsive.
+            #
+            # `min_attempt_seconds` is the floor an attempt needs to be worth
+            # making at all, and it is not the same for every query. A city
+            # search answers in seconds, so four short attempts beat one long
+            # one. A country-wide scan measured at 33s for Portugal: splitting
+            # an 80s budget four ways gave each mirror 20s and every single one
+            # timed out, turning a query that works into a reported outage.
             mirrors_left = len(mirrors) - index
             attempt_timeout = min(
-                self.timeout_seconds,
-                max(MIN_MIRROR_ATTEMPT_SECONDS, remaining / mirrors_left),
+                attempt_ceiling,
+                max(min_attempt_seconds, remaining / mirrors_left),
             )
             # Keep the server's own budget under our HTTP timeout so a slow
             # mirror answers with an error we can act on rather than holding
@@ -479,16 +635,6 @@ class OSMBusinessProvider(BusinessSearchProvider):
         )
 
     def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
-        if not filters.city:
-            # The bounding box is clamped to ~25km so Overpass can answer at
-            # all, which turns a country-wide search into "whatever happens to
-            # be near the country's centroid" — 3 rural results for Portugal in
-            # live testing. Returning nothing hands the search to a source that
-            # can cover a whole country instead of quietly answering the wrong
-            # question.
-            logger.info("Overpass skipped: no city given, area too large to scan")
-            return []
-
         if self._every_mirror_is_cooling_down():
             # Nothing is learned by spending the whole budget re-confirming an
             # outage discovered moments ago. Handing over immediately turns a
@@ -496,21 +642,34 @@ class OSMBusinessProvider(BusinessSearchProvider):
             logger.info("Overpass skipped: every mirror failed recently")
             return []
 
-        place = self._geocode(filters.city, filters.country)
-        if not place:
-            logger.info("OSM search: could not geocode city=%r country=%r", filters.city, filters.country)
-            return []
-
         tags = self._tags_for_niche(filters.niche)
         # Chains are dropped after the query (Overpass can't express "not a
         # chain" cheaply), so ask for more than we need — otherwise a city
         # centre full of franchises returns a nearly empty page of leads.
         overpass_limit = min(filters.limit * OVERFETCH_FACTOR, MAX_OVERPASS_LIMIT)
-        elements = self._run_overpass(
-            lambda server_budget: self._overpass_query(
-                place.bbox, tags, overpass_limit, server_budget
+
+        place: GeocodeResult | None = None
+        if filters.city:
+            place = self._geocode(filters.city, filters.country)
+            if not place:
+                logger.info(
+                    "OSM search: could not geocode city=%r country=%r", filters.city, filters.country
+                )
+                return []
+            elements = self._run_overpass(
+                lambda server_budget: self._overpass_query(
+                    place.bbox, tags, overpass_limit, server_budget
+                )
             )
-        )
+        else:
+            # No city. A bounding box round a country is clamped to ~25km, which
+            # would answer a question nobody asked — "whatever is near the
+            # centroid", measured as 3 rural results for Portugal. An area query
+            # covers the country properly, but only for tags sparse enough to
+            # scan; for anything denser this still hands over to Nominatim.
+            elements = self._country_wide_search(filters, tags, overpass_limit)
+            if elements is None:
+                return []
 
         niche_label = filters.niche or "Business"
         results: list[BusinessResult] = []
@@ -533,7 +692,13 @@ class OSMBusinessProvider(BusinessSearchProvider):
             # Prefer the business's own address tag, then the geocoder's
             # canonical place name, and only fall back to the raw user input.
             city_from_tags = (
-                tags_dict.get("addr:city") or place.canonical_city or filters.city or ""
+                tags_dict.get("addr:city")
+                or (place.canonical_city if place else None)
+                or filters.city
+                # A country-wide result genuinely has no city unless the
+                # business tagged one. Left blank rather than filled with the
+                # country name, which would read as a real address.
+                or ""
             )
 
             results.append(

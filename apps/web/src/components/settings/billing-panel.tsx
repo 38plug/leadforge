@@ -154,7 +154,11 @@ export function BillingPanel() {
   }
   if (!billing) return null;
 
-  const currentPlan = workspace?.plan ?? billing.current_plan;
+  // The API's answer wins over the cached workspace. This was the other way
+  // round, which meant an admin comping an account, or a Stripe webhook
+  // landing, still showed FREE here until the tab was reloaded - on the one
+  // screen whose entire job is to report what plan you are on.
+  const currentPlan = billing.current_plan ?? workspace?.plan ?? "FREE";
   const order = ["FREE", "STARTER", "PRO", "AGENCY"];
   const currentRank = order.indexOf(currentPlan);
 

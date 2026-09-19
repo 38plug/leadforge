@@ -324,7 +324,7 @@ export default function DiscoverPage() {
                 title="No businesses matched"
                 description={
                   searchedLocation && !city.trim()
-                    ? "The search completed, but nothing matched. Some trades — plumbers, accountants, law firms — are recorded in OpenStreetMap but can only be reached by searching a specific city. Add one and try again."
+                    ? "The search completed, but nothing matched. A country-wide search covers specific trades — plumbers, accountants, law firms, estate agents, builders — in full. Broader categories like restaurants or retail are too numerous to scan a whole country, so those need a city. Add one and try again."
                     : "The search completed, but nothing in this area matched your filters. Try fewer requirements, a different industry, or a nearby larger city."
                 }
               />

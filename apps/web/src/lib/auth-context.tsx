@@ -9,6 +9,10 @@ interface AuthContextValue {
   workspace: ApiWorkspace | null;
   loading: boolean;
   error: string | null;
+  /** Re-reads the session from the server. The plan can change without this
+   *  browser doing anything - an admin comps an account, or a Stripe webhook
+   *  lands - so the cached copy has to be refreshable. */
+  refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, fullName: string, workspaceName: string) => Promise<void>;
   logout: () => void;
@@ -28,6 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+    // Deliberately does not set `loading` back to true: a background refresh
+    // must not drop the whole application into its skeleton state while the
+    // user is reading it.
     try {
       const me = await api.get<MeResponse>("/api/auth/me");
       setUser(me.user);
@@ -45,6 +52,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     loadSession();
+  }, [loadSession]);
+
+  // The workspace was loaded once at mount, which meant a plan changed by an
+  // admin or by a Stripe webhook kept showing the old value until the tab was
+  // reloaded - and someone who had just been upgraded saw FREE. Re-reading
+  // when the tab regains focus covers the realistic case: the change happens
+  // while the user is looking somewhere else.
+  useEffect(() => {
+    function onFocus() {
+      if (getToken()) void loadSession();
+    }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, [loadSession]);
 
   const applyAuthResponse = (response: AuthResponse) => {
@@ -96,7 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, workspace, loading, error, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, workspace, loading, error, refresh: loadSession, login, register, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
