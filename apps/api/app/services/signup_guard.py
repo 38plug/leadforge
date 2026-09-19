@@ -47,6 +47,18 @@ class TooManyAccounts(Exception):
         self.window_hours = window_hours
         super().__init__(f"{limit} accounts per {window_hours}h from one origin")
 
+    def describe_limit(self) -> str:
+        return "Only one account" if self.limit == 1 else f"Only {self.limit} accounts"
+
+    def describe_window(self) -> str:
+        """The window in words, or nothing at all when there is no window."""
+        if not self.window_hours:
+            return ""
+        days = self.window_hours // 24
+        if days >= 2:
+            return f" every {days} days"
+        return f" every {self.window_hours} hours"
+
 
 def client_ip(request: Request, trusted_hops: int = 1) -> str | None:
     """The caller's address, as well as it can be known behind a proxy.
@@ -127,15 +139,17 @@ def check_and_record(request: Request, db: Session, settings: Settings) -> str |
     if not key:
         return None
 
-    window_hours = max(1, settings.accounts_per_ip_window_hours)
-    # Computed in Python rather than with a SQL interval expression, which is
-    # spelled differently on every database and would tie this to Postgres.
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-    recent = (
-        db.query(User)
-        .filter(User.signup_ip_hash == key, User.created_at >= cutoff)
-        .count()
-    )
+    # 0 means no window at all: count every account this origin has ever
+    # opened, which with a limit of 1 is "one account per network, ever".
+    window_hours = max(0, settings.accounts_per_ip_window_hours)
+    query = db.query(User).filter(User.signup_ip_hash == key)
+    if window_hours:
+        # Computed in Python rather than with a SQL interval expression, which
+        # is spelled differently on every database and would tie this to
+        # Postgres.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+        query = query.filter(User.created_at >= cutoff)
+    recent = query.count()
     if recent >= limit:
         logger.warning("Refused a signup: %d accounts already from this origin", recent)
         raise TooManyAccounts(limit=limit, window_hours=window_hours)

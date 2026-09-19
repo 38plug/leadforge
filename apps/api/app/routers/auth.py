@@ -49,13 +49,16 @@ def register(
     try:
         origin_hash = signup_guard.check_and_record(request, db, settings)
     except signup_guard.TooManyAccounts as exc:
+        # The wording matters more at a limit of 1 than it did at 3: most
+        # people who see this are not farming, they are the second person in
+        # an office, and a dead end would read as the product being broken.
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             (
-                f"{exc.limit} accounts have already been created from this network "
-                f"in the last {exc.window_hours // 24} days. If you are on a shared "
-                "office or campus connection, contact support and we will raise it "
-                "for you."
+                f"{exc.describe_limit()} can be created from one network"
+                f"{exc.describe_window()}, and this one has reached that. If you "
+                "are on a shared office, campus or mobile connection, contact "
+                "support and we will open your account for you."
             ),
         ) from exc
 

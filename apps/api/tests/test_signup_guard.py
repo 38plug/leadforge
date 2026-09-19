@@ -7,6 +7,8 @@ bite on farming, and it has to leave alone the shared connections that real
 customers sit behind.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.core.config import get_settings
@@ -27,16 +29,57 @@ def _register(client, email: str, ip: str = "203.0.113.7"):
     )
 
 
-def test_a_handful_of_accounts_from_one_office_is_allowed(client):
-    """Five designers in one office share an address. Refusing them would
-    reject the team accounts the Agency plan exists to sell."""
+def test_one_account_per_network(client):
+    """The configured rule: one account per network, by the product owner's
+    decision. The cost is that the second person in a shared office is
+    refused and has to contact support - which the refusal tells them."""
+    assert get_settings().max_accounts_per_ip == 1
+
+    assert _register(client, "first@studio.example").status_code == 201
+    assert _register(client, "colleague@studio.example").status_code == 429
+
+
+def test_the_refusal_reads_properly_at_a_limit_of_one(client):
+    """"1 accounts have already been created" is the kind of sentence that
+    makes a product look unfinished, and most people who see this are the
+    second person in an office rather than a farmer."""
+    _register(client, "first-there@example.com")
+
+    detail = _register(client, "second-there@example.com").json()["detail"]
+
+    assert "Only one account" in detail
+    assert "1 accounts" not in detail
+    assert "contact support" in detail, "a real customer needs a way forward"
+
+
+def test_the_limit_can_be_made_lifelong(db_session, monkeypatch):
+    """A window of 0 counts every account the origin ever opened, so "one per
+    network" means once rather than once a week."""
     settings = get_settings()
-    for index in range(settings.max_accounts_per_ip):
-        response = _register(client, f"colleague{index}@studio.example")
-        assert response.status_code == 201, f"account {index + 1} should be allowed"
+    monkeypatch.setattr(settings, "accounts_per_ip_window_hours", 0, raising=False)
+
+    class Request:
+        headers = {"x-forwarded-for": "203.0.113.7"}
+        client = None
+
+    key = signup_guard.check_and_record(Request(), db_session, settings)
+    from app.core.security import hash_password
+
+    db_session.add(
+        User(
+            email="long-ago@example.com",
+            hashed_password=hash_password("Pass123456"),
+            signup_ip_hash=key,
+            created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+    )
+    db_session.commit()
+
+    with pytest.raises(signup_guard.TooManyAccounts):
+        signup_guard.check_and_record(Request(), db_session, settings)
 
 
-def test_the_next_account_from_the_same_origin_is_refused(client):
+def test_farming_more_accounts_from_one_network_is_refused(client):
     settings = get_settings()
     for index in range(settings.max_accounts_per_ip):
         _register(client, f"farm{index}@example.com")
@@ -188,8 +231,20 @@ def test_an_admin_can_see_accounts_sharing_an_origin(client, db_session):
     db_session.commit()
 
     _register(client, "pair-a@example.com", ip="203.0.113.50")
-    _register(client, "pair-b@example.com", ip="203.0.113.50")
     _register(client, "alone@example.com", ip="198.51.100.77")
+    # The second account from that network is added directly: at a limit of 1
+    # registration would refuse it, but support raising the limit for a real
+    # office is exactly how a cluster comes to exist, and that is the case an
+    # admin needs to be able to see.
+    shared = db_session.query(User).filter(User.email == "pair-a@example.com").first()
+    db_session.add(
+        User(
+            email="pair-b@example.com",
+            hashed_password=hash_password("Pass123456"),
+            signup_ip_hash=shared.signup_ip_hash,
+        )
+    )
+    db_session.commit()
 
     from app.core.security import create_access_token
 

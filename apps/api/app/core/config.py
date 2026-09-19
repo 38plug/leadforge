@@ -145,14 +145,15 @@ class Settings(BaseSettings):
     # plan's weekly allowance is what this protects: the cheapest way to get
     # more of it is to make more accounts.
     #
-    # Not 1, deliberately. An office, a coworking space and every mobile
-    # carrier put many real people behind one address, so a limit of 1 would
-    # reject genuine customers - including the team accounts the Agency plan
-    # exists to sell. Set it to 1 to be strict anyway, or 0 to disable.
-    max_accounts_per_ip: int = 3
+    # One, by the product owner's decision. The cost of that is real and worth
+    # knowing: an office, a coworking space and every mobile carrier behind
+    # CGNAT put many genuine people on one address, and the second of them to
+    # sign up is refused. They are told to contact support, and raising this
+    # value is how support fixes it. Set 0 to disable the limit entirely.
+    max_accounts_per_ip: int = 1
     # Rolling window, in hours. A week by default, matching the allowance
-    # cycle this protects: three free plans a week is a nuisance rather than
-    # a business model.
+    # cycle this protects. Set 0 for "ever", which with a limit of 1 means one
+    # account per network for all time.
     accounts_per_ip_window_hours: int = 168
     # How many proxies sit in front of this application. Render puts exactly
     # one there. The signup guard counts X-Forwarded-For entries from the
