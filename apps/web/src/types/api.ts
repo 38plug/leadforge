@@ -334,3 +334,11 @@ export interface ApiSavedSearch {
   filters: Record<string, unknown>;
   created_at: string;
 }
+
+export interface AdminConfigStatus {
+  environment: string;
+  secret_files_mounted: string[];
+  /** Setting name -> "set" | "MISSING" (or a short description). Values are
+   *  never included, so this is safe to display and to share. */
+  settings: Record<string, string>;
+}

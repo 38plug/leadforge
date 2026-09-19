@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { MetricCard } from "@/components/dashboard/metric-card";
 import { ErrorState, SkeletonCards } from "@/components/ui/state";
 import { useApi } from "@/lib/use-api";
+import { AdminConfigPanel } from "@/components/admin/config-panel";
 import type { AdminOverview } from "@/types/api";
 
 /**
@@ -66,6 +67,8 @@ export function AdminOverviewPanel() {
           )}
         </CardContent>
       </Card>
+
+      <AdminConfigPanel />
     </div>
   );
 }
