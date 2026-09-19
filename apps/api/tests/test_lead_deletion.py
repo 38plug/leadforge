@@ -176,3 +176,22 @@ def test_a_company_backing_another_lead_is_kept(client, auth_headers, db_session
 
     assert db_session.query(Company).filter(Company.id == company_id).first() is not None
     assert db_session.query(Lead).filter(Lead.id == second_id).first() is not None
+
+
+def test_clearing_every_lead_still_does_not_refund_the_allowance(
+    client, auth_headers, db_session, demo_workspace
+):
+    """The reset path deletes leads in bulk rather than one at a time, which
+    skips SQLAlchemy's cascades entirely. The guarantee has to come from the
+    database's own ON DELETE SET NULL, so it is worth proving separately -
+    otherwise "delete everything" becomes the way to refill the week."""
+    lead_id = _lead(db_session, demo_workspace).id
+    client.post(f"/api/leads/{lead_id}/reveal", headers=auth_headers)
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1
+
+    assert client.delete("/api/leads", headers=auth_headers).status_code == 204
+
+    assert db_session.query(Lead).count() == 0
+    assert quota_service.reveals_used(db_session, demo_workspace.id) == 1, (
+        "clearing the workspace must not hand the week's allowance back"
+    )

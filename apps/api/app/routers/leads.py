@@ -6,9 +6,8 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user, get_current_workspace
 from app.db.session import get_db
-from app.models.campaign import CampaignRecipient
 from app.models.company import Company, Contact, SocialProfile, Website, WebsiteStatus
-from app.models.lead import Lead, LeadActivity, LeadStatus, Note, Task
+from app.models.lead import Lead, LeadActivity, LeadStatus
 from app.models.misc import AIAnalysis
 from app.models.search import SearchHistory
 from app.models.workspace import User, Workspace
@@ -23,14 +22,11 @@ from app.schemas.lead import (
     LeadStatusUpdate,
     LeadsDeleted,
 )
-from app.services.lead_scoring import LeadScoreService, ScoringInput
 from app.services import lead_deletion
 from app.services import quota as quota_service
+from app.services.lead_scoring import LeadScoreService, ScoringInput
 from app.schemas.admin import LeadRevealOut
-
 router = APIRouter(prefix="/api/leads", tags=["leads"])
-
-
 def _lead_query(db: Session, workspace_id: str):
     return (
         db.query(Lead)
@@ -41,22 +37,16 @@ def _lead_query(db: Session, workspace_id: str):
         )
         .filter(Lead.workspace_id == workspace_id)
     )
-
-
 def _check_websites_concurrently(website_provider, businesses: list) -> dict:
     """Check every business's website at once, keyed by its external ref.
-
     Returns a result for every business, including those with no website at
     all, so the caller can look each one up without a second code path.
     """
     if not businesses:
         return {}
-
     results: dict[str, object] = {}
-
     def check(business):
         return business.external_ref, website_provider.detect_website(business.website)
-
     # Enough to make the wait roughly one timeout rather than twenty-five,
     # without opening an unreasonable number of sockets at once.
     workers = min(10, len(businesses))
@@ -64,11 +54,8 @@ def _check_websites_concurrently(website_provider, businesses: list) -> dict:
         for external_ref, check_result in pool.map(check, businesses):
             results[external_ref] = check_result
     return results
-
-
 def _serialise(db: Session, workspace_id: str, leads: list[Lead]) -> list[LeadOut]:
     """Serialise leads, removing contact details the workspace has not unlocked.
-
     The redaction happens here rather than in the interface: an unlocked lead's
     phone number is the thing being sold, so it must not travel in a response
     the user has not paid for.
@@ -87,8 +74,6 @@ def _serialise(db: Session, workspace_id: str, leads: list[Lead]) -> list[LeadOu
             model.company.maps_url = None
         out.append(model)
     return out
-
-
 @router.get("", response_model=list[LeadOut])
 def list_leads(
     status_filter: LeadStatus | None = None,
@@ -99,8 +84,6 @@ def list_leads(
     if status_filter:
         query = query.filter(Lead.status == status_filter)
     return _serialise(db, workspace.id, query.order_by(Lead.score.desc()).all())
-
-
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 def clear_all_leads(db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
     """
@@ -111,25 +94,11 @@ def clear_all_leads(db: Session = Depends(get_db), workspace: Workspace = Depend
     another tenant's data.
     """
     lead_ids = [row[0] for row in db.query(Lead.id).filter(Lead.workspace_id == workspace.id).all()]
-    company_ids = [row[0] for row in db.query(Company.id).filter(Company.workspace_id == workspace.id).all()]
-
-    if lead_ids:
-        db.query(CampaignRecipient).filter(CampaignRecipient.lead_id.in_(lead_ids)).delete(synchronize_session=False)
-        db.query(AIAnalysis).filter(AIAnalysis.lead_id.in_(lead_ids)).delete(synchronize_session=False)
-        db.query(LeadActivity).filter(LeadActivity.lead_id.in_(lead_ids)).delete(synchronize_session=False)
-        db.query(Note).filter(Note.lead_id.in_(lead_ids)).delete(synchronize_session=False)
-        db.query(Task).filter(Task.lead_id.in_(lead_ids)).delete(synchronize_session=False)
-        db.query(Lead).filter(Lead.workspace_id == workspace.id).delete(synchronize_session=False)
-
-    if company_ids:
-        db.query(Contact).filter(Contact.company_id.in_(company_ids)).delete(synchronize_session=False)
-        db.query(SocialProfile).filter(SocialProfile.company_id.in_(company_ids)).delete(synchronize_session=False)
-        db.query(Website).filter(Website.company_id.in_(company_ids)).delete(synchronize_session=False)
-        db.query(Company).filter(Company.workspace_id == workspace.id).delete(synchronize_session=False)
-
+    # The same service as a single or bulk delete. It kept its own copy of the
+    # dependant-clearing logic until now, which is how the two drifted: the
+    # single-lead path was missing everything this one remembered.
+    lead_deletion.delete_leads(db, workspace.id, lead_ids)
     db.commit()
-
-
 @router.post("/delete", response_model=LeadsDeleted)
 def delete_selected_leads(
     payload: LeadDeleteRequest,
@@ -137,23 +106,18 @@ def delete_selected_leads(
     workspace: Workspace = Depends(get_current_workspace),
 ):
     """Delete several leads at once.
-
     POST rather than DELETE with a body: request bodies on DELETE are poorly
     supported by proxies and HTTP clients alike, and a selection of a few
     hundred ids does not belong in a query string.
-
     Ids belonging to another workspace match nothing rather than erroring, so
     a stale selection deletes what it legitimately can instead of failing
     whole. The count returned is what was actually deleted.
     """
     if not payload.lead_ids:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No leads were selected")
-
     deleted = lead_deletion.delete_leads(db, workspace.id, payload.lead_ids)
     db.commit()
     return LeadsDeleted(deleted=deleted)
-
-
 @router.post("/search", response_model=LeadSearchResult)
 def search_leads(
     payload: LeadSearchRequest,
@@ -170,7 +134,6 @@ def search_leads(
     business_provider = get_business_provider(settings)
     website_provider = get_website_provider()
     scorer = LeadScoreService()
-
     niche = filters.custom_niche or filters.niche
     businesses = business_provider.search(
         BusinessSearchFilters(
@@ -183,7 +146,6 @@ def search_leads(
             limit=25,
         )
     )
-
     # Website checks were the slowest part of a search by a wide margin: one
     # request per business, in sequence, each waiting up to the provider's
     # timeout. Twenty-five businesses could spend over two minutes here while
@@ -194,7 +156,6 @@ def search_leads(
     # these are outbound requests to twenty-five unrelated small businesses,
     # not a pool to saturate.
     website_checks = _check_websites_concurrently(website_provider, businesses)
-
     created_leads: list[Lead] = []
     for biz in businesses:
         if filters.require_phone and not biz.phone:
@@ -203,7 +164,6 @@ def search_leads(
             continue
         if filters.require_instagram and not biz.instagram:
             continue
-
         existing = (
             db.query(Company)
             .filter(Company.workspace_id == workspace.id, Company.external_ref == biz.external_ref)
@@ -216,7 +176,6 @@ def search_leads(
         )
         if not existing:
             db.add(company)
-
         # Refresh the business details on every search, not just the first —
         # re-running a search over an area is how a user picks up renames,
         # new phone numbers, and corrected addresses. Fields the provider
@@ -233,9 +192,7 @@ def search_leads(
             company.rating = biz.rating
         if biz.reviews_count is not None:
             company.reviews_count = biz.reviews_count
-
         db.flush()
-
         if not existing:
             if biz.phone or biz.email:
                 db.add(Contact(company_id=company.id, phone=biz.phone, email=biz.email))
@@ -257,11 +214,9 @@ def search_leads(
             elif contact is not None:
                 contact.phone = biz.phone or contact.phone
                 contact.email = biz.email or contact.email
-
         website_check = website_checks[biz.external_ref]
         if filters.website_status and website_check.status != filters.website_status:
             continue
-
         # A company has at most one Website row (unique on company_id), so a
         # repeat search of the same area must refresh the existing record
         # rather than insert a second one.
@@ -271,7 +226,6 @@ def search_leads(
         if website_row is None:
             website_row = Website(company_id=company.id)
             db.add(website_row)
-
         website_row.website_url = website_check.website_url
         website_row.domain = website_check.domain
         website_row.http_status = website_check.http_status
@@ -282,7 +236,6 @@ def search_leads(
         website_row.mobile_friendly = website_check.mobile_friendly
         website_row.load_time_ms = website_check.load_time_ms
         website_row.last_checked_at = website_check.last_checked_at
-
         # "Established" is normally inferred from review volume, but free
         # providers (OpenStreetMap) don't carry ratings/reviews at all — fall
         # back to other signs of an active, real listing (posted hours,
@@ -293,7 +246,6 @@ def search_leads(
             if biz.reviews_count is not None
             else bool(biz.hours or biz.phone or biz.email)
         )
-
         score_result = scorer.score(
             ScoringInput(
                 website_status=website_check.status,
@@ -308,7 +260,6 @@ def search_leads(
         )
         if score_result.score < filters.min_score:
             continue
-
         # Re-running a search over the same area is normal (refreshing an
         # area, tweaking filters). It must refresh the existing lead's score
         # rather than create a duplicate — and it must never overwrite the
@@ -328,13 +279,11 @@ def search_leads(
             db.add(lead)
             db.flush()
             db.add(LeadActivity(lead_id=lead.id, type="system", message="Lead discovered via Lead Finder"))
-
         lead.score = score_result.score
         lead.score_breakdown = [{"label": b.label, "points": b.points} for b in score_result.breakdown]
         lead.score_recommendation = score_result.recommendation
         lead.priority = score_result.priority
         created_leads.append(lead)
-
     db.add(
         SearchHistory(
             workspace_id=workspace.id,
@@ -343,10 +292,8 @@ def search_leads(
         )
     )
     db.commit()
-
     for lead in created_leads:
         db.refresh(lead)
-
     # Search finds and saves the leads; it does not unlock them. Charging a
     # whole page of quota for one search would spend a FREE plan's month in two
     # searches, and the user has not looked at any of them yet.
@@ -354,16 +301,12 @@ def search_leads(
         total_found=len(created_leads),
         leads=_serialise(db, workspace.id, created_leads),
     )
-
-
 @router.get("/{lead_id}", response_model=LeadOut)
 def get_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
     return _serialise(db, workspace.id, [lead])[0]
-
-
 @router.patch("/{lead_id}", response_model=LeadOut)
 def update_lead_status(
     lead_id: str,
@@ -379,8 +322,6 @@ def update_lead_status(
     db.commit()
     db.refresh(lead)
     return lead
-
-
 @router.delete("/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
@@ -392,8 +333,6 @@ def delete_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspac
     # any lead that had been analysed, mailed, or unlocked.
     lead_deletion.delete_leads(db, workspace.id, [lead_id])
     db.commit()
-
-
 @router.post("/{lead_id}/analyze", response_model=AILeadAnalysis)
 def analyze_lead(
     lead_id: str,
@@ -404,11 +343,9 @@ def analyze_lead(
     from app.models.misc import AIAnalysis
     from app.providers.ai import LeadContext, get_ai_provider
     from app.services.ai_service import AIService
-
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
-
     company = lead.company
     context = LeadContext(
         company_name=company.name,
@@ -422,16 +359,12 @@ def analyze_lead(
         has_phone=bool(company.contacts and company.contacts[0].phone),
         has_email=bool(company.contacts and company.contacts[0].email),
     )
-
     service = AIService(get_ai_provider(settings))
     analysis = service.analyze_lead(context)
-
     db.add(AIAnalysis(lead_id=lead.id, provider=settings.ai_provider, model=settings.ai_model, result=analysis.model_dump()))
     db.add(LeadActivity(lead_id=lead.id, type="ai", message="AI analysis completed"))
     db.commit()
-
     return analysis
-
 @router.post("/{lead_id}/reveal", response_model=LeadRevealOut)
 def reveal_lead_contact(
     lead_id: str,
@@ -440,7 +373,6 @@ def reveal_lead_contact(
     user: User = Depends(get_current_user),
 ):
     """Unlock one lead's contact details, consuming one of the plan's leads.
-
     Unlocking the same lead again is free and returns the same details, so the
     number counts leads rather than clicks.
     """
@@ -451,7 +383,6 @@ def reveal_lead_contact(
     )
     if not lead:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Lead not found")
-
     try:
         quota_service.reveal_lead(db, workspace, lead_id, user.id)
     except quota_service.QuotaExceeded as exc:
@@ -472,7 +403,6 @@ def reveal_lead_contact(
                 "plan": exc.plan,
             },
         ) from exc
-
     db.commit()
     state = quota_service.quota_state(db, workspace)
     contact = lead.company.contacts[0] if lead.company.contacts else None
@@ -488,4 +418,3 @@ def reveal_lead_contact(
         included_remaining=int(state["included_remaining"]),
         credit_balance=int(state["credit_balance"]),
     )
-
