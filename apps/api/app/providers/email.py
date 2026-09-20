@@ -205,7 +205,7 @@ class MailjetEmailProvider(EmailProvider):
     Uses Basic Auth with API key + Secret key.
     """
 
-    API_URL = "https://api.mailjet.com/v3/send"
+    API_URL = "https://api.mailjet.com/v3.1/send"
 
     def __init__(self, api_key: str, secret_key: str, from_address: str, timeout_seconds: float = 30.0):
         self.api_key = api_key
@@ -249,12 +249,13 @@ class MailjetEmailProvider(EmailProvider):
                 return EmailSendResult(provider_message_id=message_id, accepted=True)
         except Exception as exc:
             error_detail = str(exc)
-            if hasattr(exc, "read"):
+            # HTTPError has a read() method with the response body
+            if hasattr(exc, "read") and callable(exc.read):
                 try:
-                    error_detail = exc.read().decode()
+                    error_detail = exc.read().decode() or str(exc)
                 except Exception:
-                    pass
-            logger.error("Mailjet API error: %s", error_detail)
+                    error_detail = str(exc)
+            logger.error("Mailjet API error (status=%s): %s", getattr(exc, "code", "?"), error_detail)
             raise ProviderError(
                 "MAILJET_API_FAILED",
                 f"Mailjet API rejected the request: {error_detail}",
