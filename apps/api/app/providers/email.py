@@ -149,6 +149,7 @@ class ResendEmailProvider(EmailProvider):
             headers={
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "LeadForge/1.0",
             },
             method="POST",
         )
