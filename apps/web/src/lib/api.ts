@@ -2,6 +2,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const TOKEN_KEY = "leadforge_token";
 const WORKSPACE_KEY = "leadforge_workspace_id";
 
+let _redirecting = false;
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -64,6 +66,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const body = isJson ? await response.json().catch(() => null) : null;
+
+  if (response.status === 401 && auth && !_redirecting) {
+    _redirecting = true;
+    clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "Session expired");
+  }
 
   if (!response.ok) {
     const message = body?.detail || body?.message || `Request failed with status ${response.status}`;

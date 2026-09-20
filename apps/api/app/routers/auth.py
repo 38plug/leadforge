@@ -19,6 +19,7 @@ from app.schemas.auth import (
     VerifyEmailRequest,
 )
 from app.services import auth_tokens, signup_guard, transactional_email
+from app.services.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -40,6 +41,7 @@ def register(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
+    check_rate_limit(request, "register", settings.trusted_proxy_hops)
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with this email already exists")
@@ -99,6 +101,7 @@ def register(
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    check_rate_limit(request, "login", settings.trusted_proxy_hops)
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
@@ -177,9 +180,11 @@ def verify_email(
 @router.post("/forgot-password", response_model=AuthActionResponse)
 def forgot_password(
     payload: ForgotPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
+    check_rate_limit(request, "forgot-password", settings.trusted_proxy_hops)
     """Start a password reset.
 
     The response is identical whether or not the address is registered. A
@@ -204,9 +209,11 @@ def forgot_password(
 @router.post("/reset-password", response_model=AuthActionResponse)
 def reset_password(
     payload: ResetPasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
+    check_rate_limit(request, "reset-password", settings.trusted_proxy_hops)
     user = auth_tokens.consume(db, payload.token, auth_tokens.PURPOSE_RESET_PASSWORD)
     if not user:
         raise HTTPException(

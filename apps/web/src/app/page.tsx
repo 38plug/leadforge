@@ -157,7 +157,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
                 <Link
-                  href="/dashboard"
+                  href="/register"
                   className={`mt-6 block rounded-full px-4 py-2 text-center text-[12.5px] font-bold transition-all hover:scale-[1.03] ${
                     plan.highlight
                       ? "bg-gradient-brand text-brand-ink glow-btn"
@@ -196,14 +196,14 @@ export default function LandingPage() {
 
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
             <Link
-              href="/dashboard"
+              href="/register"
               className="group animate-pulse-glow inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-bold text-brand-ink transition-transform hover:scale-[1.05]"
             >
               Start finding leads
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/dashboard"
+              href="/login"
               className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.03] px-6 py-3 text-sm font-semibold text-white/85 transition-all hover:border-white/30 hover:bg-white/[0.08]"
             >
               View live dashboard
@@ -269,7 +269,7 @@ export default function LandingPage() {
             Open the workspace, run a search for your city and niche, and see your first scored leads in seconds.
           </p>
           <Link
-            href="/dashboard"
+            href="/register"
             className="group animate-pulse-glow mt-7 inline-flex items-center gap-2 rounded-full bg-gradient-brand px-6 py-3 text-sm font-bold text-brand-ink transition-transform hover:scale-[1.05]"
           >
             Open LeadForge
@@ -282,7 +282,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 text-[11.5px] text-white/35 sm:flex-row">
           <span>© {new Date().getFullYear()} LeadForge. Built for web designers and agencies.</span>
           <div className="flex gap-5">
-            <Link href="/dashboard" className="hover:text-white/70">Dashboard</Link>
+            <Link href="/login" className="hover:text-white/70">Dashboard</Link>
             <a href="#product" className="hover:text-white/70">Product</a>
             <a href="#pricing" className="hover:text-white/70">Pricing</a>
           </div>

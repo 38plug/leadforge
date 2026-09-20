@@ -50,13 +50,13 @@ export function LandingNav() {
 
           <div className="flex items-center gap-2">
             <Link
-              href="/dashboard"
+              href="/login"
               className="hidden rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/80 transition-colors hover:text-white sm:inline-flex"
             >
               Log in
             </Link>
             <Link
-              href="/dashboard"
+              href="/register"
               className="animate-pulse-glow inline-flex items-center rounded-full bg-gradient-brand px-4 py-1.5 text-[13px] font-bold text-brand-ink transition-transform hover:scale-[1.06]"
             >
               Open app
