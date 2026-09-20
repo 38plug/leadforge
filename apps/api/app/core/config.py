@@ -130,6 +130,8 @@ class Settings(BaseSettings):
     smtp_username: str | None = None
     smtp_password: str | None = None
     smtp_use_tls: bool = True
+    mailjet_api_key: str | None = None
+    mailjet_secret_key: str | None = None
 
     # Browsers block a cross-origin call unless the API names the calling
     # origin here, so the deployed frontend's own domains are defaults rather

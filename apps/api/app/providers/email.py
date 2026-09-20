@@ -198,8 +198,79 @@ class RecordingEmailProvider(EmailProvider):
         return bool(_EMAIL_RE.match(email))
 
 
+class MailjetEmailProvider(EmailProvider):
+    """Sends email via Mailjet's HTTP API — no SMTP needed.
+
+    Free tier: 6000 emails/month, sends to ANY address, no domain verification.
+    Uses Basic Auth with API key + Secret key.
+    """
+
+    API_URL = "https://api.mailjet.com/v3/send"
+
+    def __init__(self, api_key: str, secret_key: str, from_address: str, timeout_seconds: float = 30.0):
+        self.api_key = api_key
+        self.secret_key = secret_key
+        self.from_address = from_address
+        self.timeout_seconds = timeout_seconds
+
+    def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
+        import base64
+
+        payload: dict = {
+            "FromEmail": self.from_address,
+            "FromName": "LeadForge",
+            "To": [{"Email": to, "Name": ""}],
+            "Subject": subject,
+        }
+        if html:
+            payload["HtmlPart"] = html
+        payload["TextPart"] = body
+
+        if reply_to:
+            payload["Headers"] = {"Reply-To": reply_to}
+
+        data = json.dumps(payload).encode()
+        credentials = base64.b64encode(f"{self.api_key}:{self.secret_key}".encode()).decode()
+        req = Request(
+            self.API_URL,
+            data=data,
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type": "application/json",
+                "User-Agent": "LeadForge/1.0",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(req, timeout=self.timeout_seconds) as resp:
+                result = json.loads(resp.read())
+                message_id = str(result.get("MessageID", uuid.uuid4()))
+                return EmailSendResult(provider_message_id=message_id, accepted=True)
+        except Exception as exc:
+            error_detail = str(exc)
+            if hasattr(exc, "read"):
+                try:
+                    error_detail = exc.read().decode()
+                except Exception:
+                    pass
+            logger.error("Mailjet API error: %s", error_detail)
+            raise ProviderError(
+                "MAILJET_API_FAILED",
+                f"Mailjet API rejected the request: {error_detail}",
+                retryable=True,
+            ) from exc
+
+    def verify_email(self, email: str) -> bool:
+        return bool(_EMAIL_RE.match(email))
+
+
 def _resend_is_configured(settings: Settings) -> bool:
     return bool(settings.smtp_password and settings.smtp_password.startswith("re_"))
+
+
+def _mailjet_is_configured(settings: Settings) -> bool:
+    return bool(settings.mailjet_api_key and settings.mailjet_secret_key)
 
 
 def smtp_is_configured(settings: Settings) -> bool:
@@ -246,6 +317,18 @@ def get_workspace_email_provider(db, workspace_id: str, settings: Settings) -> E
 def get_email_provider(settings: Settings) -> EmailProvider:
     provider = settings.email_provider.lower()
 
+    if provider == "mailjet" or (provider == "auto" and _mailjet_is_configured(settings)):
+        if not _mailjet_is_configured(settings):
+            raise ProviderError(
+                "MAILJET_NOT_CONFIGURED",
+                "EMAIL_PROVIDER=mailjet requires MAILJET_API_KEY and MAILJET_SECRET_KEY.",
+            )
+        return MailjetEmailProvider(
+            api_key=settings.mailjet_api_key,
+            secret_key=settings.mailjet_secret_key,
+            from_address=settings.email_from_address,
+        )
+
     if provider == "resend" or (provider == "auto" and _resend_is_configured(settings)):
         if not _resend_is_configured(settings):
             raise ProviderError(
@@ -277,5 +360,5 @@ def get_email_provider(settings: Settings) -> EmailProvider:
 
     raise NotImplementedError(
         f"Email provider '{settings.email_provider}' is not implemented. "
-        "Supported: 'smtp', 'resend', or 'auto'."
+        "Supported: 'smtp', 'resend', 'mailjet', or 'auto'."
     )
