@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.core.config import Settings
-from app.providers.email import get_email_provider, smtp_is_configured
+from app.providers.email import email_is_configured, get_email_provider, smtp_is_configured
 
 logger = logging.getLogger("leadforge.email.transactional")
 
@@ -320,13 +320,13 @@ def _send(settings: Settings, to: str, subject: str, body: str, html: str | None
     #
     # Both conditions are required: a mailbox must be configured, AND the
     # provider must have accepted it.
-    configured = smtp_is_configured(settings)
+    configured = email_is_configured(settings)
     delivered = configured and bool(getattr(result, "accepted", False))
 
     if not configured:
         logger.warning(
-            "Transactional email to %s was NOT SENT (subject: %r): no mailbox is "
-            "configured. Set SMTP_HOST, SMTP_USERNAME and SMTP_PASSWORD.",
+            "Transactional email to %s was NOT SENT (subject: %r): no email provider is "
+            "configured. Set MAILJET_API_KEY/MAILJET_SECRET_KEY, or SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD.",
             to,
             subject,
         )

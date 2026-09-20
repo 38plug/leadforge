@@ -16,7 +16,7 @@ from app.core.deps import get_current_workspace
 from app.db.session import get_db
 from app.models.workspace import Workspace, WorkspaceEmailSettings
 from app.providers.ai import LeadContext, get_ai_provider
-from app.providers.email import smtp_is_configured
+from app.providers.email import email_is_configured, smtp_is_configured
 from app.providers.errors import ProviderError
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
@@ -29,7 +29,7 @@ def list_providers(
     workspace: Workspace = Depends(get_current_workspace),
 ):
     ai_live = bool(settings.ai_provider_api_key) and settings.ai_provider.lower() != "rules"
-    email_live = smtp_is_configured(settings) and settings.email_provider.lower() in ("auto", "smtp")
+    email_live = email_is_configured(settings) and settings.email_provider.lower() in ("auto", "smtp", "mailjet", "resend")
     business_live = settings.business_provider.lower() == "osm"
 
     # This workspace's own mailbox always takes precedence over the

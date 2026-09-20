@@ -279,6 +279,11 @@ def smtp_is_configured(settings: Settings) -> bool:
     return bool(settings.smtp_host and settings.smtp_username and settings.smtp_password)
 
 
+def email_is_configured(settings: Settings) -> bool:
+    """True when any outbound email provider (Mailjet, Resend, or SMTP) is set up."""
+    return _mailjet_is_configured(settings) or _resend_is_configured(settings) or smtp_is_configured(settings)
+
+
 def get_workspace_email_provider(db, workspace_id: str, settings: Settings) -> EmailProvider:
     """Resolve the mailbox a given workspace sends from.
 

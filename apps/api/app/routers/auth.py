@@ -35,7 +35,7 @@ def _set_auth_cookie(response: Response, token: str, settings: Settings) -> None
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         secure=settings.environment.lower() == "production",
-        samesite="lax",
+        samesite="none" if settings.environment.lower() == "production" else "lax",
         path="/",
     )
 
