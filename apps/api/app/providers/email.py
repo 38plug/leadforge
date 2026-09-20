@@ -216,8 +216,11 @@ class MailjetEmailProvider(EmailProvider):
     def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
         import base64
 
+        from_email = self.from_address or "support.leadforgeinc@gmail.com"
+        logger.info("Mailjet send: from=%r to=%r subject=%r", from_email, to, subject)
+
         payload: dict = {
-            "FromEmail": self.from_address,
+            "FromEmail": from_email,
             "FromName": "LeadForge",
             "To": [{"Email": to, "Name": ""}],
             "Subject": subject,
