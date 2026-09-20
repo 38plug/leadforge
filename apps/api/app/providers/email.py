@@ -220,8 +220,7 @@ class MailjetEmailProvider(EmailProvider):
         logger.info("Mailjet send: from=%r to=%r subject=%r", from_email, to, subject)
 
         payload: dict = {
-            "FromEmail": from_email,
-            "FromName": "LeadForge",
+            "From": {"Email": from_email, "Name": "LeadForge"},
             "To": [{"Email": to, "Name": ""}],
             "Subject": subject,
         }
