@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Loader2, SlidersHorizontal, Radar, Globe2, Info } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Search, Loader2, SlidersHorizontal, Radar, Globe2, Info, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { DiscoveryResultCard } from "@/components/leads/discovery-result-card";
 import { EmptyState, ErrorState, ProgressSteps, SkeletonRows } from "@/components/ui/state";
 import { useToast } from "@/components/ui/toast";
 import { api, ApiError } from "@/lib/api";
-import { adaptLead } from "@/lib/adapters";
-import type { LeadSearchFilters, LeadSearchResult } from "@/types/api";
-import type { Lead, WebsiteStatus } from "@/types/lead";
+import { adaptLeadPreview } from "@/lib/adapters";
+import type { LeadSearchFilters, LeadSearchResult, LeadSaveResponse, ApiUsage } from "@/types/api";
+import type { LeadPreview, WebsiteStatus } from "@/types/lead";
 import { COUNTRIES } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +40,10 @@ const SCORE_OPTIONS = [
   { value: 90, label: "90+" },
 ];
 
-/** The stages the backend actually performs, in the order it performs them. */
 const SEARCH_STEPS = [
   "Querying OpenStreetMap",
   "Checking website status",
   "Scoring opportunities",
-  "Saving leads",
 ];
 
 export default function DiscoverPage() {
@@ -55,24 +54,23 @@ export default function DiscoverPage() {
   const [customNiche, setCustomNiche] = useState("");
   const [websiteStatus, setWebsiteStatus] = useState<WebsiteStatus | "ANY">("ANY");
   const [minScore, setMinScore] = useState(0);
-  const [requirePhone, setRequirePhone] = useState(false);
-  const [requireEmail, setRequireEmail] = useState(false);
-  const [requireInstagram, setRequireInstagram] = useState(false);
-
   const [searching, setSearching] = useState(false);
   const [step, setStep] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<{ message: string; retryable: boolean } | null>(null);
-  const [results, setResults] = useState<Lead[]>([]);
-  // Captured at search time so the results header keeps describing what was
-  // actually searched, even if the filters are edited afterwards.
+  const [results, setResults] = useState<LeadPreview[]>([]);
   const [searchedLocation, setSearchedLocation] = useState("");
   const [searchedNiche, setSearchedNiche] = useState("");
+  const [usage, setUsage] = useState<ApiUsage | null>(null);
+
+  useEffect(() => {
+    api.get<ApiUsage>("/api/workspace/usage").then(setUsage).catch(() => {});
+  }, []);
 
   const effectiveNiche = customNiche.trim() || niche;
   const canSearch = Boolean(city.trim() || country);
 
-  async function runSearch() {
+  const runSearch = useCallback(async () => {
     if (!canSearch) return;
 
     setSearching(true);
@@ -82,12 +80,8 @@ export default function DiscoverPage() {
     setSearchedLocation([city.trim(), country].filter(Boolean).join(", ") || "anywhere");
     setSearchedNiche(effectiveNiche);
 
-    // The API performs these stages in order but does not stream progress, so
-    // the indicator advances on elapsed time. It never reaches the final step
-    // on its own - only a real response completes it - so it cannot claim the
-    // work finished when it did not.
     const stepTimer = setInterval(() => {
-      setStep((current) => (current < SEARCH_STEPS.length - 2 ? current + 1 : current));
+      setStep((current) => (current < SEARCH_STEPS.length - 1 ? current + 1 : current));
     }, 4000);
 
     const filters: LeadSearchFilters = {
@@ -97,20 +91,15 @@ export default function DiscoverPage() {
       custom_niche: customNiche || undefined,
       website_status: websiteStatus !== "ANY" ? websiteStatus : undefined,
       min_score: minScore || undefined,
-      require_phone: requirePhone,
-      require_email: requireEmail,
-      require_instagram: requireInstagram,
     };
 
     try {
       const result = await api.post<LeadSearchResult>("/api/leads/search", { filters });
-      setResults(result.leads.map(adaptLead));
+      setResults(result.leads.map(adaptLeadPreview));
       setStep(SEARCH_STEPS.length);
       setHasSearched(true);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Please try again";
-      // Kept on screen as well as toasted: a provider outage must never be
-      // mistaken for "this city has no businesses", and a toast disappears.
       setSearchError({
         message,
         retryable: err instanceof ApiError ? Boolean(err.retryable) : false,
@@ -120,9 +109,26 @@ export default function DiscoverPage() {
       clearInterval(stepTimer);
       setSearching(false);
     }
-  }
+  }, [country, city, niche, customNiche, websiteStatus, minScore, canSearch, toast]);
 
-  const noWebsiteCount = results.filter((lead) => lead.websiteStatus === "NO_WEBSITE").length;
+  const handleSaveLead = useCallback(async (preview: LeadPreview) => {
+    try {
+      const response = await api.post<LeadSaveResponse>("/api/leads/save", { leads: [preview] });
+      if (response.saved > 0) {
+        setResults((prev) =>
+          prev.map((r) =>
+            r.external_ref === preview.external_ref ? { ...r, saved: true } : r
+          )
+        );
+        toast({ title: "Lead saved", description: `${preview.name} added to your leads`, variant: "success" });
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Could not save lead";
+      toast({ title: "Save failed", description: message, variant: "error" });
+    }
+  }, [toast]);
+
+  const noWebsiteCount = results.filter((lead) => lead.website_status === "NO_WEBSITE").length;
   const strongCount = results.filter((lead) => lead.score.score >= 80).length;
 
   return (
@@ -131,6 +137,25 @@ export default function DiscoverPage() {
         title="Discover opportunities"
         description="Find real businesses that may need a better web presence. Results come from OpenStreetMap and are checked live."
       />
+
+      {usage?.quota_exhausted && (
+        <div className="rounded-lg border border-warning/25 bg-warning/[0.07] px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+            <p className="text-sm text-warning">
+              You&apos;ve reached your weekly usage. To keep searching, buy more leads or upgrade your plan.
+            </p>
+          </div>
+          <div className="mt-2 flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/settings?tab=billing">Buy more leads</Link>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <Link href="/settings?tab=billing">Upgrade plan</Link>
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[330px_minmax(0,1fr)]">
         {/* ---------------------------------------------------------- filters */}
@@ -218,34 +243,6 @@ export default function DiscoverPage() {
               </div>
             </div>
 
-            {/* A minimum-rating filter used to sit here. It was removed rather
-                than disabled: OpenStreetMap does not record ratings or review
-                counts, so the control was only implemented by the mock
-                provider and silently changed nothing against real data. A
-                filter that does nothing is worse than no filter. */}
-
-            <div className="flex flex-col gap-2">
-              <span className="label-caps">Must have</span>
-              {[
-                { key: "phone", label: "Phone number", value: requirePhone, set: setRequirePhone },
-                { key: "email", label: "Email address", value: requireEmail, set: setRequireEmail },
-                { key: "instagram", label: "Instagram", value: requireInstagram, set: setRequireInstagram },
-              ].map((item) => (
-                <label
-                  key={item.key}
-                  className="flex cursor-pointer items-center gap-2.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.value}
-                    onChange={(e) => item.set(e.target.checked)}
-                    className="h-3.5 w-3.5 rounded-sm border-border accent-[hsl(var(--primary))]"
-                  />
-                  {item.label}
-                </label>
-              ))}
-            </div>
-
             <Button onClick={runSearch} disabled={searching || !canSearch} className="w-full">
               {searching ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -273,7 +270,7 @@ export default function DiscoverPage() {
               <h3 className="text-sm font-semibold">Results</h3>
               <p className="mt-0.5 truncate text-2xs text-subtle-foreground">
                 {hasSearched
-                  ? `${results.length} saved as leads in ${searchedLocation}`
+                  ? `${results.length} opportunities found in ${searchedLocation}`
                   : "Set your filters and run a search"}
               </p>
             </div>
@@ -332,9 +329,9 @@ export default function DiscoverPage() {
 
             {!searching && !searchError && results.length > 0 && (
               <ul className="stagger flex flex-col gap-2.5">
-                {results.map((lead) => (
-                  <li key={lead.id}>
-                    <DiscoveryResultCard lead={lead} />
+                {results.map((preview) => (
+                  <li key={preview.external_ref}>
+                    <DiscoveryResultCard preview={preview} onSave={handleSaveLead} />
                   </li>
                 ))}
               </ul>

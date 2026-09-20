@@ -4,7 +4,7 @@ LeadForge is never tightly coupled to one vendor for business data, website chec
 
 | Provider | Interface | File | Free/default | Mock | Paid alternative |
 |---|---|---|---|---|---|
-| Business search | `BusinessSearchProvider` | `providers/business.py` | `OSMBusinessProvider` — **real** businesses from OpenStreetMap (Nominatim + Overpass), no API key, no signup, no cost | `MockBusinessProvider` — deterministic fake businesses, used when `BUSINESS_PROVIDER=mock` | Google Places, Yelp Fusion, or a licensed business data vendor |
+| Business search | `BusinessSearchProvider` | `providers/business.py` | `OSMBusinessProvider` — **real** businesses from OpenStreetMap (Nominatim + Overpass), no API key, no signup, no cost. Also: `PhotonBusinessProvider` (better geocoding), `WikidataBusinessProvider` (global structured data), `OpenCageBusinessProvider` (free key, 2500 req/day), `ReefAPIProvider` (free tier: 1,000 credits, provides Google Maps ratings, no credit card). `multi` mode chains all free sources. | `MockBusinessProvider` — deterministic fake businesses, used when `BUSINESS_PROVIDER=mock` | Yelp Fusion (paid), or a licensed business data vendor |
 | Website detection | `WebsiteProvider` | `providers/website.py` | `HttpWebsiteProvider` — real HTTP(S) request, no API key required | *(not needed)* | — |
 | Social discovery | `SocialProvider` | `providers/social.py` | — | `MockSocialProvider` (default) | Instagram Graph API, Meta APIs, or a social-data vendor — see the caveat below |
 | AI | `AIProvider` | `providers/ai.py` | — | `MockAIProvider` — template-based, always returns schema-valid output | Any OpenAI/Anthropic-compatible chat completion endpoint |
@@ -13,6 +13,67 @@ LeadForge is never tightly coupled to one vendor for business data, website chec
 ## Business search: free by default (OpenStreetMap)
 
 `BUSINESS_PROVIDER=osm` is the default — no signup, no API key, no cost. It geocodes the requested city/country with **Nominatim** (OSM's free geocoder) into a bounding box, then queries **Overpass** (OSM's free query API) for named points of interest tagged with the niche's corresponding OSM tag (e.g. `amenity=restaurant`, `shop=hairdresser`, `office=lawyer` — see `_OSM_NICHE_TAGS` in `business.py`). Returned fields (name, address, phone, website, opening hours, and occasionally a `contact:instagram` tag the business owner added themselves) are real, public OSM data.
+
+### Additional free providers
+
+For countries where OSM data is thin, additional providers can be enabled:
+
+| Provider | Config value | Key needed | Coverage |
+|---|---|---|---|
+| **Photon** | `photon` | No | Same OSM data but faster, more reliable geocoding via photon.komoot.io |
+| **Wikidata** | `wikidata` | No | Global structured data from Wikipedia/Wikidata — businesses with structured entries worldwide |
+| **OpenCage** | `opencage` | Free key (2,500 req/day) | Better geocoding in some developing countries |
+| **ReefAPI** | `reefapi` | Free key (1,000 credits) | Real ratings from Google Maps — no credit card required |
+| **Multi** | `multi` | Optional (OpenCage key) | Chains all free sources: OSM → Nominatim → Photon → Wikidata → OpenCage |
+
+**Recommended**: Set `BUSINESS_PROVIDER=multi` for maximum global coverage. The chain tries each source in turn — if one fails or returns nothing, the next is tried automatically. Without an OpenCage key, the first four sources are used.
+
+### Wikidata provider details
+
+`WikidataBusinessProvider` queries Wikidata's SPARQL endpoint for businesses by category (P31 = "instance of") in a geographic area. It has global coverage because Wikidata aggregates structured data from Wikipedia and other sources worldwide. The provider:
+
+- Maps niches to Wikidata entity categories (e.g. "restaurant" → Q2024448, "hotel" → Q27686)
+- Resolves country names/codes to Wikidata entity IDs (e.g. "PT" → Q45)
+- Uses Photon for bounding box geocoding when a city is specified
+- Returns real structured data: name, coordinates, address, phone, website
+
+Trade-offs vs. OSM:
+- + Better coverage in countries with thin OSM mapping
+- + Structured, machine-readable data with coordinates
+- + No volunteer infrastructure (Wikimedia Foundation-backed)
+- - Only includes businesses that have been added to Wikidata
+- - May have less frequent updates for small businesses
+
+### Photon provider details
+
+`PhotonBusinessProvider` uses photon.komoot.io (a free, OSM-backed geocoder by Komoot) instead of Nominatim for geocoding, then queries Overpass for POIs. Photon is faster and more reliable than Nominatim in many regions, with no rate limit.
+
+### OpenCage provider details
+
+`OpenCageBusinessProvider` uses OpenCage's geocoding API (free tier: 2,500 requests/day, no credit card) for better bounding boxes, then queries Overpass for POIs. Particularly useful in developing countries where Nominatim's bounding boxes are imprecise.
+
+Sign up at https://opencagedata.com/api and set `OPENCAGE_API_KEY`.
+
+### ReefAPI provider details
+
+`ReefAPIProvider` uses ReefAPI's Google Maps engine to search for businesses and retrieve real ratings and review counts. This is the only free provider that includes ratings from Google Maps without requiring a credit card.
+
+**Setup:**
+1. Create an account at https://reefapi.com (no credit card required)
+2. Get your API key from the dashboard
+3. Set `BUSINESS_PROVIDER=reefapi` and `REEFAPI_KEY=your_key`
+
+**Free tier:** 1,000 credits — no credit card required for signup. Google Maps search costs 2 credits per call, so ~500 free searches.
+
+**Trade-offs vs. OSM:**
+- + Real star ratings and review counts from Google Maps
+- + Better coverage in most countries
+- + No credit card required
+- - Requires API key (free tier, but signup needed)
+- - 1,000 credits free (~500 searches)
+- - No Instagram handles (not in Google's data)
+
+**How ratings affect scoring:** The `min_score` filter in the Discover page uses ratings when available. With ReefAPI enabled, you can filter by minimum rating (e.g., "only show businesses rated 4+ stars") — this filter has no effect with OSM since OSM doesn't provide ratings.
 
 **Chain outlets are excluded.** A franchise is a bad lead for a web designer — the site is decided at corporate and there's no local owner to sell to — so results tagged `brand:wikidata` (or `brand`) are dropped; see `_is_chain` in `business.py`. Because the filter runs after the query, the provider deliberately asks Overpass for `OVERFETCH_FACTOR`× the requested rows, so a franchise-heavy city centre still fills a page.
 

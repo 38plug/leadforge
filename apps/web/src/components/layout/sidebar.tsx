@@ -81,7 +81,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   // Usage is refetched independently of the session, so its plan is the
   // fresher of the two. The cached workspace is only a fallback for the
   // moment before usage arrives.
-  const plan = usage?.plan ?? workspace?.plan ?? "FREE";
+  const plan = user?.is_superuser ? "Administrator" : (usage?.plan ?? workspace?.plan ?? "FREE");
   const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 
   return (

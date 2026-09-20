@@ -110,9 +110,40 @@ class LeadSearchRequest(BaseModel):
     search_name: str | None = None
 
 
+class LeadPreview(BaseModel):
+    """Preview of a search result before saving. Does not create DB records."""
+    external_ref: str
+    name: str
+    niche: str
+    country: str | None = None
+    city: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    instagram: str | None = None
+    website: str | None = None
+    maps_url: str | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
+    hours: str | None = None
+    description: str | None = None
+    website_status: WebsiteStatus
+    score: LeadScoreOut
+
+
 class LeadSearchResult(BaseModel):
     total_found: int
-    leads: list[LeadOut]
+    leads: list[LeadPreview]
+
+
+class LeadSaveRequest(BaseModel):
+    """Save one or more previewed leads to the workspace."""
+    leads: list[LeadPreview] = Field(min_length=1, max_length=50)
+
+
+class LeadSaveResponse(BaseModel):
+    saved: int
+    lead_ids: list[str]
 
 
 class LeadDeleteRequest(BaseModel):

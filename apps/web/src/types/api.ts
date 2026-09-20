@@ -171,9 +171,39 @@ export interface LeadSearchFilters {
   radius_km?: number;
 }
 
+export interface ApiLeadPreview {
+  external_ref: string;
+  name: string;
+  niche: string;
+  country: string | null;
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  instagram: string | null;
+  website: string | null;
+  maps_url: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  hours: string | null;
+  description: string | null;
+  website_status: WebsiteStatus;
+  score: {
+    score: number;
+    breakdown: ApiScoreBreakdownItem[];
+    recommendation: string;
+    priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  };
+}
+
 export interface LeadSearchResult {
   total_found: number;
-  leads: ApiLead[];
+  leads: ApiLeadPreview[];
+}
+
+export interface LeadSaveResponse {
+  saved: number;
+  lead_ids: string[];
 }
 
 export interface ApiNote {

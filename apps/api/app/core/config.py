@@ -75,12 +75,31 @@ class Settings(BaseSettings):
     # key, no signup, no cost) — set BUSINESS_PROVIDER=mock to go fully
     # offline, or to a paid provider name once one is implemented and its
     # API key is set.
+    #
+    # Supported values:
+    #   osm        — Overpass + Nominatim (default, free, no key)
+    #   overpass   — Overpass only
+    #   nominatim  — Nominatim only
+    #   photon     — Photon geocoder + Overpass (free, no key)
+    #   wikidata   — Wikidata SPARQL business discovery (free, no key)
+    #   opencage   — OpenCage geocoding + Overpass (free key, 2500 req/day)
+    #   reefapi    — ReefAPI Google Maps (free: 1,000 credits, provides ratings)
+    #   multi      — Chains all free sources: OSM → Photon → Wikidata → OpenCage
+    #   mock       — Deterministic fake data (refused in production)
     business_provider: str = "osm"
     business_provider_api_key: str | None = None
     # Optional contact (email or project URL) included in the User-Agent
     # sent to OpenStreetMap's Nominatim service, per its usage policy. Not
     # required, but recommended if you start running many searches.
     osm_contact: str | None = None
+    # OpenCage API key (free tier: 2,500 req/day, no credit card).
+    # Only needed when BUSINESS_PROVIDER=opencage or multi.
+    # Sign up at https://opencagedata.com/api
+    opencage_api_key: str | None = None
+    # ReefAPI key (free tier: 1,000 credits, provides Google Maps ratings).
+    # Only needed when BUSINESS_PROVIDER=reefapi.
+    # Sign up at https://reefapi.com (no credit card required).
+    reefapi_key: str | None = None
 
     # Social profiles are read from the business record itself (OpenStreetMap
     # carries real, public contact:instagram / contact:facebook tags). There is
@@ -102,7 +121,8 @@ class Settings(BaseSettings):
 
     # Email provider. "auto" sends over SMTP once SMTP_HOST/SMTP_USERNAME/
     # SMTP_PASSWORD are set (any provider works — Gmail, Zoho, Fastmail,
-    # a VPS), and otherwise records outbound mail without sending it.
+    # a VPS), otherwise tries Resend if SMTP_PASSWORD starts with "re_",
+    # and finally falls back to recording outbound mail without sending it.
     email_provider: str = "auto"
     email_from_address: str = "outreach@leadforge.dev"
     smtp_host: str | None = None

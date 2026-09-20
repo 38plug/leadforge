@@ -180,7 +180,7 @@ export function RevealContact({
     { icon: Phone, label: "Phone", value: shownPhone, href: shownPhone ? `tel:${shownPhone}` : null },
     { icon: Mail, label: "Email", value: shownEmail, href: shownEmail ? `mailto:${shownEmail}` : null },
     { icon: Globe, label: "Website", value: shownWebsite, href: shownWebsite ?? null },
-    { icon: MapPin, label: "Map", value: shownMaps ? "Open in maps" : null, href: shownMaps ?? null },
+    { icon: MapPin, label: "Map", value: shownMaps ? "Open in maps" : null, href: shownMaps ?? null, isMaps: true },
   ].filter((row) => row.value);
 
   return (
@@ -194,6 +194,24 @@ export function RevealContact({
         <ul className="flex flex-col gap-2.5">
           {rows.map((row) => {
             const Icon = row.icon;
+            if ((row as { isMaps?: boolean }).isMaps && row.href) {
+              return (
+                <li key={row.label}>
+                  <a
+                    href={row.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2.5 rounded-md border border-border bg-background px-3.5 py-2.5 text-[13px] transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+                  >
+                    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#EA4335"/>
+                      <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+                    </svg>
+                    <span className="text-primary">{row.value}</span>
+                  </a>
+                </li>
+              );
+            }
             return (
               <li key={row.label} className="flex items-center gap-2.5 text-[13px]">
                 <Icon className="h-3.5 w-3.5 shrink-0 text-subtle-foreground" aria-hidden="true" />

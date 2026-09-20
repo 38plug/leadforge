@@ -17,6 +17,9 @@ from app.schemas.ai import AILeadAnalysis
 from app.schemas.lead import (
     LeadDeleteRequest,
     LeadOut,
+    LeadPreview,
+    LeadSaveRequest,
+    LeadSaveResponse,
     LeadSearchRequest,
     LeadSearchResult,
     LeadStatusUpdate,
@@ -126,9 +129,9 @@ def search_leads(
     settings: Settings = Depends(get_settings),
 ):
     """
-    Runs the full discover -> detect website -> score pipeline synchronously
-    for a small result set. At production scale this becomes a background
-    job (see apps/worker) that streams progress back over websockets/polling.
+    Runs the discover -> detect website -> score pipeline and returns preview
+    results WITHOUT saving to the database. Leads are only persisted when the
+    user explicitly saves them via POST /api/leads/save.
     """
     filters = payload.filters
     business_provider = get_business_provider(settings)
@@ -146,17 +149,8 @@ def search_leads(
             limit=25,
         )
     )
-    # Website checks were the slowest part of a search by a wide margin: one
-    # request per business, in sequence, each waiting up to the provider's
-    # timeout. Twenty-five businesses could spend over two minutes here while
-    # the user watched a progress bar, which reads as the search being broken.
-    #
-    # They are independent of each other and almost entirely spent waiting on
-    # the network, so they run together. The worker count is capped because
-    # these are outbound requests to twenty-five unrelated small businesses,
-    # not a pool to saturate.
     website_checks = _check_websites_concurrently(website_provider, businesses)
-    created_leads: list[Lead] = []
+    previews: list[LeadPreview] = []
     for biz in businesses:
         if filters.require_phone and not biz.phone:
             continue
@@ -164,143 +158,144 @@ def search_leads(
             continue
         if filters.require_instagram and not biz.instagram:
             continue
-        existing = (
-            db.query(Company)
-            .filter(Company.workspace_id == workspace.id, Company.external_ref == biz.external_ref)
-            .first()
-        )
-        company = existing or Company(
-            workspace_id=workspace.id,
-            source="lead_finder",
-            external_ref=biz.external_ref,
-        )
-        if not existing:
-            db.add(company)
-        # Refresh the business details on every search, not just the first —
-        # re-running a search over an area is how a user picks up renames,
-        # new phone numbers, and corrected addresses. Fields the provider
-        # doesn't carry (e.g. ratings on OSM) must not wipe existing values.
-        company.name = biz.name
-        company.niche = biz.niche
-        company.country = biz.country or company.country or ""
-        company.city = biz.city or company.city or ""
-        company.address = biz.address or company.address
-        company.maps_url = biz.maps_url or company.maps_url
-        company.hours = biz.hours or company.hours
-        company.description = biz.description or company.description
-        if biz.rating is not None:
-            company.rating = biz.rating
-        if biz.reviews_count is not None:
-            company.reviews_count = biz.reviews_count
-        db.flush()
-        if not existing:
-            if biz.phone or biz.email:
-                db.add(Contact(company_id=company.id, phone=biz.phone, email=biz.email))
-            if biz.instagram:
-                db.add(
-                    SocialProfile(
-                        company_id=company.id,
-                        platform="instagram",
-                        handle=biz.instagram,
-                        url=f"https://instagram.com/{biz.instagram}",
-                    )
-                )
-        else:
-            # Keep the primary contact in step with the provider without
-            # discarding details a user may have filled in by hand.
-            contact = db.query(Contact).filter(Contact.company_id == company.id).first()
-            if contact is None and (biz.phone or biz.email):
-                db.add(Contact(company_id=company.id, phone=biz.phone, email=biz.email))
-            elif contact is not None:
-                contact.phone = biz.phone or contact.phone
-                contact.email = biz.email or contact.email
         website_check = website_checks[biz.external_ref]
         if filters.website_status and website_check.status != filters.website_status:
             continue
-        # A company has at most one Website row (unique on company_id), so a
-        # repeat search of the same area must refresh the existing record
-        # rather than insert a second one.
-        website_row = (
-            db.query(Website).filter(Website.company_id == company.id).first() if existing else None
-        )
-        if website_row is None:
-            website_row = Website(company_id=company.id)
-            db.add(website_row)
-        website_row.website_url = website_check.website_url
-        website_row.domain = website_check.domain
-        website_row.http_status = website_check.http_status
-        website_row.ssl_status = website_check.ssl_status
-        website_row.redirect_url = website_check.redirect_url
-        website_row.title = website_check.title
-        website_row.status = website_check.status
-        website_row.mobile_friendly = website_check.mobile_friendly
-        website_row.load_time_ms = website_check.load_time_ms
-        website_row.last_checked_at = website_check.last_checked_at
-        # "Established" is normally inferred from review volume, but free
-        # providers (OpenStreetMap) don't carry ratings/reviews at all — fall
-        # back to other signs of an active, real listing (posted hours,
-        # a contact channel) so those leads aren't unfairly zeroed out on
-        # this factor just because the data source doesn't track reviews.
-        is_established = (
-            (biz.reviews_count or 0) >= 30
-            if biz.reviews_count is not None
-            else bool(biz.hours or biz.phone or biz.email)
-        )
         score_result = scorer.score(
             ScoringInput(
                 website_status=website_check.status,
                 has_active_social=bool(biz.instagram),
                 has_phone=bool(biz.phone),
                 has_email=bool(biz.email),
-                # A listing carrying these is a real, maintained business
-                # rather than a stale pin on a map.
                 has_address=bool(biz.address),
                 has_hours=bool(biz.hours),
             )
         )
         if score_result.score < filters.min_score:
             continue
-        # Re-running a search over the same area is normal (refreshing an
-        # area, tweaking filters). It must refresh the existing lead's score
-        # rather than create a duplicate — and it must never overwrite the
-        # pipeline status of a lead the user is already working.
-        lead = (
-            db.query(Lead)
-            .filter(Lead.workspace_id == workspace.id, Lead.company_id == company.id)
-            .first()
-        )
-        if lead is None:
-            lead = Lead(
-                workspace_id=workspace.id,
-                company_id=company.id,
-                status=LeadStatus.NEW,
-                source="lead_finder",
+        previews.append(
+            LeadPreview(
+                external_ref=biz.external_ref,
+                name=biz.name,
+                niche=biz.niche,
+                country=biz.country,
+                city=biz.city,
+                address=biz.address,
+                phone=biz.phone,
+                email=biz.email,
+                instagram=biz.instagram,
+                website=website_check.website_url,
+                maps_url=biz.maps_url,
+                rating=biz.rating,
+                reviews_count=biz.reviews_count,
+                hours=biz.hours,
+                description=biz.description,
+                website_status=website_check.status,
+                score={
+                    "score": score_result.score,
+                    "breakdown": [{"label": b.label, "points": b.points} for b in score_result.breakdown],
+                    "recommendation": score_result.recommendation,
+                    "priority": score_result.priority,
+                },
             )
-            db.add(lead)
-            db.flush()
-            db.add(LeadActivity(lead_id=lead.id, type="system", message="Lead discovered via Lead Finder"))
-        lead.score = score_result.score
-        lead.score_breakdown = [{"label": b.label, "points": b.points} for b in score_result.breakdown]
-        lead.score_recommendation = score_result.recommendation
-        lead.priority = score_result.priority
-        created_leads.append(lead)
+        )
     db.add(
         SearchHistory(
             workspace_id=workspace.id,
             filters=filters.model_dump(mode="json"),
-            result_count=len(created_leads),
+            result_count=len(previews),
         )
     )
     db.commit()
-    for lead in created_leads:
-        db.refresh(lead)
-    # Search finds and saves the leads; it does not unlock them. Charging a
-    # whole page of quota for one search would spend a FREE plan's month in two
-    # searches, and the user has not looked at any of them yet.
     return LeadSearchResult(
-        total_found=len(created_leads),
-        leads=_serialise(db, workspace.id, created_leads),
+        total_found=len(previews),
+        leads=previews,
     )
+
+
+@router.post("/save", response_model=LeadSaveResponse, status_code=status.HTTP_201_CREATED)
+def save_leads(
+    payload: LeadSaveRequest,
+    db: Session = Depends(get_db),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    """Save previewed leads to the workspace. Only creates records for
+    external_refs that are not already saved."""
+    saved_ids: list[str] = []
+
+    for preview in payload.leads:
+        # Skip if already saved
+        existing = (
+            db.query(Company)
+            .filter(Company.workspace_id == workspace.id, Company.external_ref == preview.external_ref)
+            .first()
+        )
+        if existing:
+            lead = (
+                db.query(Lead)
+                .filter(Lead.workspace_id == workspace.id, Lead.company_id == existing.id)
+                .first()
+            )
+            if lead:
+                saved_ids.append(lead.id)
+                continue
+            company = existing
+        else:
+            company = Company(
+                workspace_id=workspace.id,
+                source="lead_finder",
+                external_ref=preview.external_ref,
+                name=preview.name,
+                niche=preview.niche,
+                country=preview.country or "",
+                city=preview.city or "",
+                address=preview.address,
+                maps_url=preview.maps_url,
+                hours=preview.hours,
+                description=preview.description,
+                rating=preview.rating,
+                reviews_count=preview.reviews_count,
+            )
+            db.add(company)
+            db.flush()
+
+        if not existing:
+            if preview.phone or preview.email:
+                db.add(Contact(company_id=company.id, phone=preview.phone, email=preview.email))
+            if preview.instagram:
+                db.add(
+                    SocialProfile(
+                        company_id=company.id,
+                        platform="instagram",
+                        handle=preview.instagram,
+                        url=f"https://instagram.com/{preview.instagram}",
+                    )
+                )
+
+        website_row = Website(
+            company_id=company.id,
+            website_url=preview.website,
+            status=preview.website_status,
+        )
+        db.add(website_row)
+
+        lead = Lead(
+            workspace_id=workspace.id,
+            company_id=company.id,
+            status=LeadStatus.NEW,
+            source="lead_finder",
+            score=preview.score.score,
+            score_breakdown=[{"label": b.label, "points": b.points} for b in preview.score.breakdown],
+            score_recommendation=preview.score.recommendation,
+            priority=preview.score.priority,
+        )
+        db.add(lead)
+        db.flush()
+        db.add(LeadActivity(lead_id=lead.id, type="system", message="Lead saved from discovery"))
+        saved_ids.append(lead.id)
+
+    db.commit()
+    return LeadSaveResponse(saved=len(saved_ids), lead_ids=saved_ids)
 @router.get("/{lead_id}", response_model=LeadOut)
 def get_lead(lead_id: str, db: Session = Depends(get_db), workspace: Workspace = Depends(get_current_workspace)):
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()

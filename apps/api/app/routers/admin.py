@@ -29,7 +29,7 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.lead import Lead
-from app.models.misc import Coupon, Subscription
+from app.models.misc import Coupon, CreditPurchase, LeadReveal, Subscription
 from app.models.workspace import User, Workspace, WorkspaceMember, WorkspaceRole
 from app.schemas.admin import (
     AdminCouponCreate,
@@ -104,11 +104,74 @@ def config_status(
                 "set" if smtp_is_configured(settings) else "INCOMPLETE"
             ),
             "OSM_CONTACT": state(settings.osm_contact),
+            "REEFAPI_KEY": state(settings.reefapi_key),
         },
     }
 
 
 # --------------------------------------------------------------- overview
+
+
+@router.post("/test-smtp")
+def test_server_smtp(
+    to_email: str = "test@example.com",
+    settings: Settings = Depends(get_settings),
+    _: User = Depends(require_superuser),
+):
+    """Send a test email using the server-level SMTP (transactional email path).
+
+    This is the same path used for password resets, welcome emails, etc.
+    Returns detailed diagnostic info so misconfigurations are visible.
+    """
+    from app.providers.email import get_email_provider, smtp_is_configured
+    from app.providers.errors import ProviderError
+
+    if not smtp_is_configured(settings):
+        return {
+            "ok": False,
+            "error": "SMTP not configured",
+            "detail": "Set SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, and EMAIL_FROM_ADDRESS.",
+        }
+
+    provider = get_email_provider(settings)
+    provider_name = type(provider).__name__
+
+    try:
+        result = provider.send(
+            to=to_email,
+            subject="LeadForge SMTP test",
+            body="This is a test email from LeadForge server-level SMTP. If you see this, it works!",
+            html="<p>This is a test email from LeadForge server-level SMTP. If you see this, it works!</p>",
+        )
+        return {
+            "ok": True,
+            "provider": provider_name,
+            "message_id": result.provider_message_id,
+            "accepted": result.accepted,
+            "from": settings.email_from_address,
+            "smtp_host": settings.smtp_host,
+            "smtp_port": settings.smtp_port,
+        }
+    except ProviderError as exc:
+        return {
+            "ok": False,
+            "provider": provider_name,
+            "error": exc.message,
+            "retryable": exc.retryable,
+            "from": settings.email_from_address,
+            "smtp_host": settings.smtp_host,
+            "smtp_port": settings.smtp_port,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "provider": provider_name,
+            "error": str(exc),
+            "error_type": type(exc).__name__,
+            "from": settings.email_from_address,
+            "smtp_host": settings.smtp_host,
+            "smtp_port": settings.smtp_port,
+        }
 
 
 @router.get("/overview", response_model=AdminOverview)
@@ -190,6 +253,44 @@ def delete_user(
 
     _delete_user_and_owned_workspaces(db, user)
     db.commit()
+
+
+@router.post("/users/{user_id}/reset-usage", status_code=status.HTTP_200_OK)
+def reset_user_usage(
+    user_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_superuser),
+):
+    """Reset usage counters for all workspaces owned by this user.
+
+    Deletes all LeadReveal records for the current period, effectively
+    restoring the weekly allowance. Does not affect purchased credits.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Account not found")
+
+    memberships = (
+        db.query(WorkspaceMember, Workspace)
+        .join(Workspace, Workspace.id == WorkspaceMember.workspace_id)
+        .filter(WorkspaceMember.user_id == user.id)
+        .all()
+    )
+
+    from app.services.quota import current_period
+    period = current_period()
+    reset_count = 0
+
+    for member, workspace in memberships:
+        deleted = (
+            db.query(LeadReveal)
+            .filter(LeadReveal.workspace_id == workspace.id, LeadReveal.period == period)
+            .delete(synchronize_session=False)
+        )
+        reset_count += deleted
+
+    db.commit()
+    return {"reset": reset_count, "period": period}
 
 
 # ------------------------------------------------------------- workspaces

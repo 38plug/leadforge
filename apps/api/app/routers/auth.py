@@ -91,13 +91,14 @@ def register(
     transactional_email.send_verification_email(
         settings, user.email, user.full_name, verification_token
     )
+    transactional_email.send_welcome_email(settings, user.email, user.full_name)
 
     token = create_access_token(subject=user.id)
     return TokenResponse(access_token=token, user=user, workspace=workspace)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Incorrect email or password")
@@ -108,6 +109,14 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     if not membership:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "No workspace found for this account")
     workspace = db.query(Workspace).filter(Workspace.id == membership.workspace_id).first()
+
+    # Send login notification (best-effort, must not block login)
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    transactional_email.send_login_notification(
+        settings, user.email, user.full_name,
+        ip_address=ip_address, user_agent=user_agent,
+    )
 
     token = create_access_token(subject=user.id)
     return TokenResponse(access_token=token, user=user, workspace=workspace)

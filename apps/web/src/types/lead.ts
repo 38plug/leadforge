@@ -74,3 +74,24 @@ export interface ActivityEntry {
   message: string;
   type: "system" | "email" | "ai" | "call" | "note";
 }
+
+export interface LeadPreview {
+  external_ref: string;
+  name: string;
+  niche: string;
+  country: string | null;
+  city: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  instagram: string | null;
+  website: string | null;
+  maps_url: string | null;
+  rating: number | null;
+  reviews_count: number | null;
+  hours: string | null;
+  description: string | null;
+  website_status: WebsiteStatus;
+  score: LeadScore;
+  saved?: boolean;
+}

@@ -1111,6 +1111,1229 @@ class NominatimBusinessProvider(BusinessSearchProvider):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Photon — free OSM-based geocoder (photon.komoot.io)
+# ---------------------------------------------------------------------------
+
+
+class PhotonBusinessProvider(BusinessSearchProvider):
+    """Business discovery via Photon geocoding + Overpass POI search.
+
+    Photon is a free, OSM-backed geocoder run by Komoot. It is faster and
+    more reliable than Nominatim in many regions, and has no rate limit
+    (though we self-throttle to be polite). The Overpass query is the same
+    as OSMBusinessProvider but benefits from Photon's better geocoding for
+    the bounding box, which means more accurate results in countries where
+    Nominatim's bounding boxes are imprecise.
+    """
+
+    PHOTON_URL = "https://photon.komoot.io/api/"
+
+    def __init__(self, contact: str | None = None, timeout_seconds: float = 30.0):
+        contact_suffix = f" ({contact})" if contact else ""
+        self.user_agent = f"LeadForge-App/0.1{contact_suffix}"
+        self.timeout_seconds = timeout_seconds
+        # Reuse the OSM provider's Overpass machinery
+        self._overpass = OSMBusinessProvider(contact=contact, timeout_seconds=timeout_seconds)
+
+    def _geocode(self, city: str | None, country: str | None) -> GeocodeResult | None:
+        query = ", ".join(part for part in [city, country] if part)
+        if not query:
+            return None
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
+                response = client.get(self.PHOTON_URL, params={"q": query, "limit": 1})
+                response.raise_for_status()
+                data = response.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Photon geocoding failed for %r: %s", query, exc)
+            return None
+
+        features = data.get("features", [])
+        if not features:
+            return None
+
+        props = features[0].get("properties", {})
+        coords = features[0].get("geometry", {}).get("coordinates", [0, 0])
+        lon, lat = coords[0], coords[1]
+
+        # Photon returns a bbox array [west, south, east, north]
+        bbox_raw = props.get("bbox")
+        if bbox_raw and len(bbox_raw) == 4:
+            west, south, east, north = bbox_raw
+        else:
+            # No bbox from Photon; build a small one around the point
+            half = MAX_BBOX_SPAN_DEGREES / 2
+            south, west, north, east = lat - half, lon - half, lat + half, lon + half
+
+        bbox = OSMBusinessProvider._clamp_bbox(south, west, north, east, lat, lon)
+        canonical = props.get("name") or city
+        return GeocodeResult(bbox=bbox, canonical_city=canonical)
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        tags = self._overpass._tags_for_niche(filters.niche)
+        overpass_limit = min(filters.limit * OVERFETCH_FACTOR, MAX_OVERPASS_LIMIT)
+
+        place: GeocodeResult | None = None
+        if filters.city:
+            place = self._geocode(filters.city, filters.country)
+            if not place:
+                logger.info("Photon search: could not geocode city=%r country=%r", filters.city, filters.country)
+                return []
+            elements = self._overpass._run_overpass(
+                lambda server_budget: self._overpass._overpass_query(
+                    place.bbox, tags, overpass_limit, server_budget
+                )
+            )
+        else:
+            elements = self._overpass._country_wide_search(filters, tags, overpass_limit)
+            if elements is None:
+                return []
+
+        niche_label = filters.niche or "Business"
+        results: list[BusinessResult] = []
+        for element in elements:
+            tags_dict = element.get("tags", {})
+            name = tags_dict.get("name")
+            if not name:
+                continue
+            if OSMBusinessProvider._is_chain(tags_dict):
+                continue
+
+            lat = element.get("lat") or element.get("center", {}).get("lat")
+            lon = element.get("lon") or element.get("center", {}).get("lon")
+
+            address_parts = [
+                tags_dict.get("addr:housenumber"),
+                tags_dict.get("addr:street"),
+            ]
+            address = " ".join(p for p in address_parts if p) or None
+            city_from_tags = (
+                tags_dict.get("addr:city")
+                or (place.canonical_city if place else None)
+                or filters.city
+                or ""
+            )
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"photon-{element['type']}-{element['id']}",
+                    name=name,
+                    niche=niche_label,
+                    country=filters.country or tags_dict.get("addr:country") or "",
+                    city=city_from_tags,
+                    address=address,
+                    maps_url=f"https://www.openstreetmap.org/{element['type']}/{element['id']}" if not lat else f"https://maps.google.com/?q={lat},{lon}",
+                    rating=None,
+                    reviews_count=None,
+                    phone=tags_dict.get("contact:phone") or tags_dict.get("phone"),
+                    email=tags_dict.get("contact:email") or tags_dict.get("email"),
+                    website=tags_dict.get("contact:website") or tags_dict.get("website"),
+                    instagram=OSMBusinessProvider._extract_instagram_handle(tags_dict),
+                    hours=tags_dict.get("opening_hours"),
+                    description=None,
+                )
+            )
+            if len(results) >= filters.limit:
+                break
+
+        return results
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Wikidata SPARQL — global business discovery, no API key
+# ---------------------------------------------------------------------------
+
+# Maps niche strings to Wikidata "instance of" (P31) values. Each value is a
+# Wikidata entity ID representing a category. Wikidata has global coverage
+# because it aggregates structured data from Wikipedia and other sources.
+_WIKIDATA_NICHE_CATEGORIES: dict[str, list[str]] = {
+    "restaurant": ["Q2024448"],  # restaurant
+    "cafe": ["Q1852091", "Q1370003"],  # cafe, coffeehouse
+    "barber": ["Q3704955"],  # hairdresser
+    "beauty salon": ["Q3704955", "Q2331193"],  # hairdresser, beauty salon
+    "dentist": ["Q43478"],  # dentist
+    "dental clinic": ["Q43478"],
+    "medical clinic": ["Q4260475", "Q16917"],  # medical facility, hospital
+    "gym": ["Q847017"],  # gymnasium / fitness centre
+    "fitness": ["Q847017"],
+    "hotel": ["Q27686"],  # hotel
+    "real estate": ["Q1750925"],  # real estate agent
+    "auto repair": ["Q1336222"],  # automobile repair shop
+    "plumber": ["Q847009"],  # plumber
+    "electrician": ["Q1198525"],  # electrician
+    "law firm": ["Q487661"],  # law firm
+    "accountant": ["Q131410"],  # accountant
+    "photographer": ["Q33231"],  # photographer
+    "construction": ["Q180102"],  # construction company
+    "cleaning": ["Q386316"],  # cleaning company
+    "retail": ["Q167013"],  # retail company
+    "professional services": ["Q4721255"],  # professional services company
+}
+
+# Generic fallback: "any named business" — a broad net for niches that don't
+# have a specific Wikidata category mapped.
+_WIKIDATA_GENERIC_BUSINESS_CATEGORIES = [
+    "Q43229",  # organization
+    "Q783794",  # company
+]
+
+
+class WikidataBusinessProvider(BusinessSearchProvider):
+    """Business discovery through Wikidata's SPARQL endpoint.
+
+    Wikidata is a free, collaborative knowledge base with global coverage.
+    Many businesses (especially those with a Wikipedia presence) have
+    structured entries with name, address, phone, website, coordinates, and
+    industry classification. The SPARQL endpoint allows querying by category
+    and geographic area with no API key and no rate limit (be polite though).
+
+    Trade-offs vs. OSM:
+    + Better coverage in countries with thin OSM mapping
+    + Structured, machine-readable data with coordinates
+    + No volunteer infrastructure (Wikidata is backed by the Wikimedia Foundation)
+    - Only includes businesses that have been added to Wikidata (not every
+      corner shop)
+    - May have less frequent updates for small businesses
+    """
+
+    SPARQL_URL = "https://query.wikidata.org/sparql"
+
+    # Wikidata country codes are ISO 3166-1 alpha-2, same as what Nominatim
+    # returns, but we need the Wikidata entity ID for SPARQL queries.
+    # This is a small static map for the most common countries; the fallback
+    # uses the ISO code directly with a SPARQL property.
+    _ISO_TO_WIKIDATA_COUNTRY: dict[str, str] = {
+        "US": "Q30", "GB": "Q145", "DE": "Q183", "FR": "Q142",
+        "IT": "Q38", "ES": "Q29", "PT": "Q45", "BR": "Q155",
+        "IN": "Q668", "JP": "Q17", "CN": "Q148", "AU": "Q408",
+        "CA": "Q16", "MX": "Q96", "AR": "Q414", "CO": "Q739",
+        "NL": "Q55", "BE": "Q31", "CH": "Q39", "AT": "Q40",
+        "SE": "Q34", "NO": "Q20", "DK": "Q75", "FI": "Q171",
+        "PL": "Q36", "CZ": "Q213", "RO": "Q218", "HU": "Q28",
+        "GR": "Q142", "TR": "Q43", "ZA": "Q258", "NG": "Q1033",
+        "EG": "Q79", "KE": "Q114", "GH": "Q117", "AE": "Q878",
+        "SA": "Q851", "IL": "Q801", "TH": "Q869", "VN": "Q881",
+        "PH": "Q928", "ID": "Q252", "MY": "Q833", "SG": "Q334",
+        "PK": "Q843", "BD": "Q902", "LK": "Q854", "NP": "Q837",
+        "CL": "Q298", "PE": "Q419", "VE": "Q710", "EC": "Q736",
+    }
+
+    def __init__(self, timeout_seconds: float = 30.0):
+        self.timeout_seconds = timeout_seconds
+        self._overpass = OSMBusinessProvider(timeout_seconds=timeout_seconds)
+
+    def _categories_for_niche(self, niche: str | None) -> list[str]:
+        if not niche:
+            return _WIKIDATA_GENERIC_BUSINESS_CATEGORIES
+        return _WIKIDATA_NICHE_CATEGORIES.get(
+            niche.strip().lower(), _WIKIDATA_GENERIC_BUSINESS_CATEGORIES
+        )
+
+    def _country_entity(self, country: str | None) -> str | None:
+        """Resolve a country name/code to a Wikidata entity ID."""
+        if not country:
+            return None
+        code = country.strip().upper()
+        # If it's already a Q-code, use it directly
+        if code.startswith("Q") and code[1:].isdigit():
+            return code
+        # Try the static map
+        entity = self._ISO_TO_WIKIDATA_COUNTRY.get(code)
+        if entity:
+            return entity
+        # Try 2-letter ISO code from the country name via Nominatim
+        iso = self._overpass._country_code(country)
+        if iso:
+            return self._ISO_TO_WIKIDATA_COUNTRY.get(iso.upper())
+        return None
+
+    def _build_sparql(
+        self,
+        categories: list[str],
+        country_entity: str | None,
+        bbox: tuple[float, float, float, float] | None,
+        limit: int,
+    ) -> str:
+        """Build a SPARQL query for businesses matching categories in an area."""
+        south, west, north, east = bbox if bbox else (-90, -180, 90, 180)
+
+        # Build the category filter (P31 = instance of)
+        cat_values = " ".join(f"wd:{c}" for c in categories)
+        category_filter = f"?business wdt:P31 {cat_values} ."
+
+        # Country filter via P17 (country)
+        country_filter = ""
+        if country_entity:
+            country_filter = f"?business wdt:P17 wd:{country_entity} ."
+
+        # Geographic bounding box filter via P625 (coordinate location)
+        geo_filter = (
+            f"?business p:P625 ?coord . "
+            f"?coord psv:P625 ?coordValue . "
+            f"?coordValue wikibase:geoLatitude ?lat . "
+            f"?coordValue wikibase:geoLongitude ?lon . "
+            f"FILTER(?lat >= {south} && ?lat <= {north} && ?lon >= {west} && ?lon <= {east})"
+        )
+
+        return f"""
+        SELECT ?business ?businessLabel ?lat ?lon ?website ?phone ?email ?streetLabel ?cityLabel ?countryLabel ?hours
+        WHERE {{
+          {category_filter}
+          {country_filter}
+          {geo_filter}
+          OPTIONAL {{ ?business wdt:P856 ?website . }}
+          OPTIONAL {{ ?business wdt:P1329 ?phone . }}
+          OPTIONAL {{ ?business wdt:P968 ?email . }}
+          OPTIONAL {{ ?business wdt:P6375 ?streetLabel . }}
+          OPTIONAL {{ ?business wdt:P131 ?city . ?city rdfs:label ?cityLabel . FILTER(LANG(?cityLabel) = "en") }}
+          OPTIONAL {{ ?business wdt:P17 ?country . ?country rdfs:label ?countryLabel . FILTER(LANG(?countryLabel) = "en") }}
+          OPTIONAL {{ ?business wdt:P11204 ?hours . }}
+          SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en" . }}
+        }}
+        LIMIT {limit}
+        """
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        categories = self._categories_for_niche(filters.niche)
+        country_entity = self._country_entity(filters.country)
+
+        # If we have a city, try to get a bounding box via Photon/Nominatim
+        bbox: tuple[float, float, float, float] | None = None
+        canonical_city: str | None = None
+        if filters.city:
+            photon = PhotonBusinessProvider(timeout_seconds=self.timeout_seconds)
+            place = photon._geocode(filters.city, filters.country)
+            if place:
+                bbox = place.bbox
+                canonical_city = place.canonical_city
+
+        # Cap the query to avoid overwhelming the endpoint
+        query_limit = min(filters.limit * 2, 100)
+        sparql = self._build_sparql(categories, country_entity, bbox, query_limit)
+
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, headers={
+                "User-Agent": "LeadForge-App/0.1 (https://github.com/leadforge)",
+                "Accept": "application/sparql-results+json",
+            }) as client:
+                response = client.get(
+                    self.SPARQL_URL,
+                    params={"query": sparql, "format": "json"},
+                )
+                response.raise_for_status()
+                data = response.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Wikidata SPARQL search failed: %s", exc)
+            return []
+
+        results: list[BusinessResult] = []
+        seen: set[str] = set()
+
+        for binding in data.get("results", {}).get("bindings", []):
+            qid = binding.get("business", {}).get("value", "")
+            if not qid or qid in seen:
+                continue
+            seen.add(qid)
+
+            name = binding.get("businessLabel", {}).get("value", "")
+            if not name:
+                continue
+
+            lat_str = binding.get("lat", {}).get("value")
+            lon_str = binding.get("lon", {}).get("value")
+            lat = float(lat_str) if lat_str else None
+            lon = float(lon_str) if lon_str else None
+
+            city = binding.get("cityLabel", {}).get("value") or canonical_city or filters.city or ""
+            street = binding.get("streetLabel", {}).get("value")
+            country_label = binding.get("countryLabel", {}).get("value") or filters.country or ""
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"wikidata-{qid}",
+                    name=name,
+                    niche=filters.niche or "Business",
+                    country=country_label,
+                    city=city,
+                    address=street,
+                    maps_url=f"https://maps.google.com/?q={lat},{lon}" if lat and lon else None,
+                    rating=None,
+                    reviews_count=None,
+                    phone=binding.get("phone", {}).get("value"),
+                    email=binding.get("email", {}).get("value"),
+                    website=binding.get("website", {}).get("value"),
+                    instagram=None,
+                    hours=binding.get("hours", {}).get("value"),
+                    description=None,
+                )
+            )
+            if len(results) >= filters.limit:
+                break
+
+        return results
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# OpenCage — geocoding fallback (free tier: 2,500 req/day)
+# ---------------------------------------------------------------------------
+
+
+class OpenCageBusinessProvider(BusinessSearchProvider):
+    """Business discovery using OpenCage geocoding + Overpass POI search.
+
+    OpenCage provides geocoding with better coverage in some regions than
+    OSM's Nominatim, particularly in developing countries. The free tier
+    allows 2,500 requests per day with no credit card. The Overpass query
+    is the same as OSMBusinessProvider but uses OpenCage for the bounding
+    box, which can yield better results when Nominatim's boxes are imprecise.
+    """
+
+    OPENCAGE_URL = "https://api.opencagedata.com/geocode/v1/json"
+
+    def __init__(self, api_key: str, contact: str | None = None, timeout_seconds: float = 30.0):
+        if not api_key:
+            raise ValueError("OpenCage requires an API key (free at opencagedata.com)")
+        self.api_key = api_key
+        contact_suffix = f" ({contact})" if contact else ""
+        self.user_agent = f"LeadForge-App/0.1{contact_suffix}"
+        self.timeout_seconds = timeout_seconds
+        self._overpass = OSMBusinessProvider(contact=contact, timeout_seconds=timeout_seconds)
+
+    def _geocode(self, city: str | None, country: str | None) -> GeocodeResult | None:
+        query = ", ".join(part for part in [city, country] if part)
+        if not query:
+            return None
+        try:
+            with httpx.Client(timeout=self.timeout_seconds, headers={"User-Agent": self.user_agent}) as client:
+                response = client.get(
+                    self.OPENCAGE_URL,
+                    params={
+                        "q": query,
+                        "key": self.api_key,
+                        "limit": 1,
+                        "no_annotations": 1,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("OpenCage geocoding failed for %r: %s", query, exc)
+            return None
+
+        results = data.get("results", [])
+        if not results:
+            return None
+
+        place = results[0]
+        geometry = place.get("geometry", {})
+        lat = geometry.get("lat", 0)
+        lon = geometry.get("lng", 0)
+        bounds = place.get("bounds", {})
+
+        if bounds:
+            sw = bounds.get("southwest", {})
+            ne = bounds.get("northeast", {})
+            south = sw.get("lat", lat - 0.1)
+            west = sw.get("lng", lon - 0.1)
+            north = ne.get("lat", lat + 0.1)
+            east = ne.get("lng", lon + 0.1)
+        else:
+            half = MAX_BBOX_SPAN_DEGREES / 2
+            south, west, north, east = lat - half, lon - half, lat + half, lon + half
+
+        bbox = OSMBusinessProvider._clamp_bbox(south, west, north, east, lat, lon)
+        canonical = place.get("formatted") or city
+        return GeocodeResult(bbox=bbox, canonical_city=canonical.split(",")[0].strip() or city)
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        tags = self._overpass._tags_for_niche(filters.niche)
+        overpass_limit = min(filters.limit * OVERFETCH_FACTOR, MAX_OVERPASS_LIMIT)
+
+        place: GeocodeResult | None = None
+        if filters.city:
+            place = self._geocode(filters.city, filters.country)
+            if not place:
+                logger.info("OpenCage search: could not geocode city=%r country=%r", filters.city, filters.country)
+                return []
+            elements = self._overpass._run_overpass(
+                lambda server_budget: self._overpass._overpass_query(
+                    place.bbox, tags, overpass_limit, server_budget
+                )
+            )
+        else:
+            elements = self._overpass._country_wide_search(filters, tags, overpass_limit)
+            if elements is None:
+                return []
+
+        niche_label = filters.niche or "Business"
+        results: list[BusinessResult] = []
+        for element in elements:
+            tags_dict = element.get("tags", {})
+            name = tags_dict.get("name")
+            if not name:
+                continue
+            if OSMBusinessProvider._is_chain(tags_dict):
+                continue
+
+            lat = element.get("lat") or element.get("center", {}).get("lat")
+            lon = element.get("lon") or element.get("center", {}).get("lon")
+
+            address_parts = [
+                tags_dict.get("addr:housenumber"),
+                tags_dict.get("addr:street"),
+            ]
+            address = " ".join(p for p in address_parts if p) or None
+            city_from_tags = (
+                tags_dict.get("addr:city")
+                or (place.canonical_city if place else None)
+                or filters.city
+                or ""
+            )
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"opencage-{element['type']}-{element['id']}",
+                    name=name,
+                    niche=niche_label,
+                    country=filters.country or tags_dict.get("addr:country") or "",
+                    city=city_from_tags,
+                    address=address,
+                    maps_url=f"https://www.openstreetmap.org/{element['type']}/{element['id']}" if not lat else f"https://maps.google.com/?q={lat},{lon}",
+                    rating=None,
+                    reviews_count=None,
+                    phone=tags_dict.get("contact:phone") or tags_dict.get("phone"),
+                    email=tags_dict.get("contact:email") or tags_dict.get("email"),
+                    website=tags_dict.get("contact:website") or tags_dict.get("website"),
+                    instagram=OSMBusinessProvider._extract_instagram_handle(tags_dict),
+                    hours=tags_dict.get("opening_hours"),
+                    description=None,
+                )
+            )
+            if len(results) >= filters.limit:
+                break
+
+        return results
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        return None
+
+
+class GooglePlacesProvider(BusinessSearchProvider):
+    """Google Places API (New) for business search with ratings and review counts.
+
+    Free tier: 5,000 Text Search Pro requests/month. Provides real ratings,
+    review counts, and opening hours from Google's crowd-sourced data.
+
+    Setup:
+    1. Create a project at https://console.cloud.google.com
+    2. Enable "Places API (New)" in the library
+    3. Create an API key at https://console.cloud.google.com/apis/credentials
+    4. Set BUSINESS_PROVIDER=google and GOOGLE_MAPS_API_KEY=your_key
+
+    Trade-offs vs. OSM:
+    - + Real star ratings and review counts from Google
+    - + Better coverage in most countries
+    - + Real opening hours
+    - - Requires API key (free tier, but signup needed)
+    - - No Instagram handles (not in Google's data)
+    """
+
+    API_URL = "https://places.googleapis.com/v1/places:searchText"
+
+    # Map niches to Google Places types for better search results
+    NICHE_TO_TYPE: dict[str, str] = {
+        "restaurant": "restaurant",
+        "cafe": "cafe",
+        "coffee": "cafe",
+        "barber": "hair_care",
+        "hairdresser": "hair_care",
+        "beauty salon": "beauty_salon",
+        "dentist": "dentist",
+        "dental clinic": "dentist",
+        "gym": "gym",
+        "fitness": "gym",
+        "hotel": "lodging",
+        "real estate": "real_estate_agency",
+        "auto repair": "car_repair",
+        "plumber": "plumber",
+        "electrician": "electrician",
+        "law firm": "lawyer",
+        "accountant": "accounting",
+        "photographer": "photographer",
+        "construction": "general_contractor",
+        "cleaning": "home_cleaning_service",
+    }
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def _build_query(self, filters: BusinessSearchFilters) -> str:
+        parts = []
+        if filters.niche:
+            parts.append(filters.niche)
+        if filters.city:
+            parts.append(filters.city)
+        if filters.country:
+            parts.append(filters.country)
+        return " ".join(parts)
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        query = self._build_query(filters)
+        if not query:
+            return []
+
+        request_body = {
+            "textQuery": query,
+            "maxResultCount": min(filters.limit, 20),
+            "languageCode": "en",
+        }
+
+        # Add location bias if we have coordinates
+        if filters.city and filters.country:
+            # Use a general bias toward the specified location
+            request_body["locationBias"] = {
+                "circle": {
+                    "center": {"latitude": 0, "longitude": 0},
+                    "radius": 50000.0,  # 50km radius
+                }
+            }
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    self.API_URL,
+                    json=request_body,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Goog-Api-Key": self.api_key,
+                        "X-Goog-FieldMask": "places.id,places.displayName,places.types,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.websiteUri,places.currentOpeningHours,places.regularOpeningHours",
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            raise ProviderError(
+                f"Google Places API error {exc.response.status_code}",
+                code="google_http_error",
+            ) from exc
+        except Exception as exc:
+            raise ProviderError(
+                f"Google Places API request failed: {type(exc).__name__}",
+                code="google_request_failed",
+            ) from exc
+
+        results: list[BusinessResult] = []
+        for place in data.get("places", []):
+            # Filter by minimum rating if specified
+            if filters.min_rating is not None and (place.get("rating") or 0) < filters.min_rating:
+                continue
+
+            # Filter by minimum reviews if specified
+            if filters.min_reviews is not None and (place.get("userRatingCount") or 0) < filters.min_reviews:
+                continue
+
+            # Filter by maximum reviews if specified
+            if filters.max_reviews is not None and (place.get("userRatingCount") or 0) > filters.max_reviews:
+                continue
+
+            location = place.get("location", {})
+
+            # Format opening hours
+            hours = None
+            opening_hours = place.get("currentOpeningHours") or place.get("regularOpeningHours")
+            if opening_hours and opening_hours.get("weekdayDescriptions"):
+                # Take Monday's hours as a representative
+                hours = opening_hours["weekdayDescriptions"][0] if opening_hours["weekdayDescriptions"] else None
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"google-{place.get('id', 'unknown')}",
+                    name=place.get("displayName", {}).get("text", "Unknown"),
+                    niche=filters.niche or "Business",
+                    country=filters.country or "",
+                    city=filters.city or "",
+                    address=place.get("formattedAddress"),
+                    maps_url=f"https://maps.google.com/?q={location.get('latitude', 0)},{location.get('longitude', 0)}",
+                    rating=place.get("rating"),
+                    reviews_count=place.get("userRatingCount"),
+                    phone=place.get("nationalPhoneNumber"),
+                    email=None,
+                    website=place.get("websiteUri"),
+                    instagram=None,
+                    hours=hours,
+                    description=place.get("types", [None])[0] if place.get("types") else None,
+                )
+            )
+
+        return results
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        if not external_ref.startswith("google-"):
+            return None
+        place_id = external_ref[7:]  # Remove "google-" prefix
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    f"https://places.googleapis.com/v1/places/{place_id}",
+                    headers={
+                        "X-Goog-Api-Key": self.api_key,
+                        "X-Goog-FieldMask": "id,displayName,types,formattedAddress,location,rating,userRatingCount,nationalPhoneNumber,websiteUri,currentOpeningHours,regularOpeningHours",
+                    },
+                )
+                response.raise_for_status()
+                place = response.json()
+        except Exception:
+            return None
+
+        location = place.get("location", {})
+        hours = None
+        opening_hours = place.get("currentOpeningHours") or place.get("regularOpeningHours")
+        if opening_hours and opening_hours.get("weekdayDescriptions"):
+            hours = opening_hours["weekdayDescriptions"][0] if opening_hours["weekdayDescriptions"] else None
+
+        return BusinessResult(
+            external_ref=external_ref,
+            name=place.get("displayName", {}).get("text", "Unknown"),
+            niche="Business",
+            country="",
+            city="",
+            address=place.get("formattedAddress"),
+            maps_url=f"https://maps.google.com/?q={location.get('latitude', 0)},{location.get('longitude', 0)}",
+            rating=place.get("rating"),
+            reviews_count=place.get("userRatingCount"),
+            phone=place.get("nationalPhoneNumber"),
+            email=None,
+            website=place.get("websiteUri"),
+            instagram=None,
+            hours=hours,
+            description=place.get("types", [None])[0] if place.get("types") else None,
+        )
+
+
+class ReefAPIProvider(BusinessSearchProvider):
+    """ReefAPI Google Maps provider — real ratings, no Google billing.
+
+    Free tier: 1,000 credits, no credit card required. Google Maps search
+    costs 2 credits per call, so ~500 free searches.
+
+    Sign up at https://reefapi.com — no credit card needed.
+
+    Trade-offs vs. OSM:
+    + Real star ratings and review counts from Google Maps
+    + Better coverage in most countries
+    + No credit card required
+    + include_contacts enriches results with scraped emails and socials
+    - Requires API key (free tier, but signup needed)
+    - 1,000 credits free (~500 searches)
+    """
+
+    API_URL = "https://api.reefapi.com/google-maps/v1/place/search"
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        location_parts = [filters.city, filters.country]
+        location = ", ".join(p for p in location_parts if p)
+        if not location:
+            logger.warning("ReefAPI search called with no location — returning empty")
+            return []
+
+        query = f"{filters.niche or 'business'} in {location}"
+
+        payload: dict[str, str | int | bool] = {
+            "query": query,
+            "maxResults": min(filters.limit, 20),
+            "include_contacts": True,
+        }
+
+        logger.info("ReefAPI search: query=%r", query)
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(
+                    self.API_URL,
+                    json=payload,
+                    headers={
+                        "x-api-key": self.api_key,
+                        "content-type": "application/json",
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:500] if exc.response else ""
+            logger.error("ReefAPI HTTP %s: %s", exc.response.status_code, body)
+            raise ProviderError(
+                f"ReefAPI error {exc.response.status_code}: {body[:200]}",
+                code="reefapi_http_error",
+            ) from exc
+        except Exception as exc:
+            logger.error("ReefAPI request failed: %s: %s", type(exc).__name__, exc)
+            raise ProviderError(
+                f"ReefAPI request failed: {type(exc).__name__}: {exc}",
+                code="reefapi_request_failed",
+            ) from exc
+
+        if not data.get("ok"):
+            error = data.get("error") or {}
+            logger.error("ReefAPI returned ok=false: %s", error)
+            raise ProviderError(
+                f"ReefAPI error: {error.get('message', 'Unknown error')}",
+                code=error.get("code", "reefapi_error"),
+            )
+
+        raw_data = data.get("data")
+        if isinstance(raw_data, dict):
+            places = raw_data.get("places", [])
+        elif isinstance(raw_data, list):
+            places = raw_data
+        else:
+            places = []
+
+        logger.info("ReefAPI returned %d places", len(places))
+
+        if not places:
+            meta = data.get("meta", {})
+            logger.warning(
+                "ReefAPI returned 0 places. meta=%s, data keys=%s",
+                meta,
+                list(raw_data.keys()) if isinstance(raw_data, dict) else type(raw_data),
+            )
+
+        results: list[BusinessResult] = []
+
+        for biz in places[:filters.limit]:
+            if not isinstance(biz, dict):
+                continue
+
+            rating = biz.get("rating")
+            if filters.min_rating is not None and (rating or 0) < filters.min_rating:
+                continue
+
+            reviews = biz.get("review_count")
+            if filters.min_reviews is not None and (reviews or 0) < filters.min_reviews:
+                continue
+
+            if filters.max_reviews is not None and (reviews or 0) > filters.max_reviews:
+                continue
+
+            name = biz.get("name", "Unknown")
+
+            if self._is_chain(name):
+                continue
+
+            phone = biz.get("phone")
+            if phone:
+                phone = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+            address = biz.get("address")
+
+            email = None
+            socials = biz.get("socials") or {}
+            instagram = socials.get("instagram")
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"reefapi-{biz.get('place_id', biz.get('fid', 'unknown'))}",
+                    name=name,
+                    niche=filters.niche or "Business",
+                    country=filters.country or "",
+                    city=filters.city or biz.get("locality", ""),
+                    address=address,
+                    maps_url=biz.get("maps_url") or f"https://maps.google.com/?q={biz.get('latitude', 0)},{biz.get('longitude', 0)}",
+                    rating=float(rating) if rating else None,
+                    reviews_count=int(reviews) if reviews else None,
+                    phone=phone,
+                    email=email,
+                    website=biz.get("website"),
+                    instagram=instagram,
+                    hours=biz.get("hours_today"),
+                    description=biz.get("category_primary") or biz.get("category") or biz.get("type"),
+                )
+            )
+
+        logger.info("ReefAPI returning %d filtered results", len(results))
+        return results
+
+    @staticmethod
+    def _is_chain(name: str) -> bool:
+        """Check if a business name is a known chain."""
+        chain_keywords = [
+            "starbucks", "mcdonald", "subway", "domino", "pizza hut",
+            "burger king", "wendy", "taco bell", "kfc", "papa john",
+            "dunkin", "chick-fil-a", "chipotle", "panera", "applebee",
+            "ihop", "olive garden", "chili", "tgifridays", "outback",
+            "red lobster", "longhorn", "buffalo wild wings", "five guys",
+            "shake shack", "in-n-out", "whataburger", "sonic",
+            "starbucks coffee", "costa coffee", "nero",
+        ]
+        name_lower = name.lower()
+        return any(chain in name_lower for chain in chain_keywords)
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        return None
+
+
+class SerpAPIProvider(BusinessSearchProvider):
+    """Business search using SerpAPI's Google Maps engine.
+
+    Free tier: 250 searches/month, no credit card required.
+    Provides real Google Maps ratings and review counts.
+
+    Sign up at https://serpapi.com — no credit card needed.
+
+    Trade-offs vs. OSM:
+    + Real star ratings and review counts from Google Maps
+    + Better coverage in most countries
+    + No credit card required
+    - Requires API key (free tier, but signup needed)
+    - 250 searches/month limit
+    - No Instagram handles (not in Google's data)
+    """
+
+    API_URL = "https://serpapi.com/search.json"
+
+    # Map common niche keywords to better Google Maps queries
+    NICHE_TO_QUERY: dict[str, str] = {
+        "restaurant": "restaurants",
+        "cafe": "coffee shops",
+        "coffee": "coffee shops",
+        "barber": "hair salons",
+        "hairdresser": "hair salons",
+        "beauty salon": "beauty salons",
+        "dentist": "dentists",
+        "dental clinic": "dental clinics",
+        "gym": "gyms",
+        "fitness": "fitness centers",
+        "hotel": "hotels",
+        "real estate": "real estate agents",
+        "auto repair": "auto repair shops",
+        "plumber": "plumbers",
+        "electrician": "electricians",
+        "law firm": "law firms",
+        "accountant": "accountants",
+        "photographer": "photographers",
+        "construction": "construction companies",
+        "cleaning": "cleaning services",
+    }
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def _build_query(self, filters: BusinessSearchFilters) -> str:
+        parts = []
+        if filters.niche:
+            niche_query = self.NICHE_TO_QUERY.get(filters.niche.strip().lower(), filters.niche)
+            parts.append(niche_query)
+        if filters.city:
+            parts.append(filters.city)
+        if filters.country:
+            parts.append(filters.country)
+        return " ".join(parts)
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        query = self._build_query(filters)
+        if not query:
+            return []
+
+        params: dict[str, str | int] = {
+            "engine": "google_maps",
+            "q": query,
+            "api_key": self.api_key,
+            "hl": "en",
+        }
+
+        # Add location bias if we have coordinates
+        if filters.city and filters.country:
+            # Use Google Maps default for the location
+            params["ll"] = "@0,0,14z"  # Default, will be refined by query
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(self.API_URL, params=params)
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            raise ProviderError(
+                f"SerpAPI error {exc.response.status_code}",
+                code="serpapi_http_error",
+            ) from exc
+        except Exception as exc:
+            raise ProviderError(
+                f"SerpAPI request failed: {type(exc).__name__}",
+                code="serpapi_request_failed",
+            ) from exc
+
+        results: list[BusinessResult] = []
+        local_results = data.get("local_results", [])
+
+        for biz in local_results[:filters.limit]:
+            # Filter by minimum rating if specified
+            rating = biz.get("rating")
+            if filters.min_rating is not None and (rating or 0) < filters.min_rating:
+                continue
+
+            # Filter by minimum reviews if specified
+            reviews = biz.get("reviews")
+            if filters.min_reviews is not None and (reviews or 0) < filters.min_reviews:
+                continue
+
+            # Filter by maximum reviews if specified
+            if filters.max_reviews is not None and (reviews or 0) > filters.max_reviews:
+                continue
+
+            name = biz.get("title", "Unknown")
+
+            # Skip chain outlets
+            if self._is_chain(name):
+                continue
+
+            phone = biz.get("phone")
+            if phone:
+                phone = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+            address = biz.get("address")
+            place_type = biz.get("type") or "Business"
+            if isinstance(place_type, list):
+                place_type = place_type[0] if place_type else "Business"
+
+            # Get opening hours
+            hours = None
+            operating_hours = biz.get("operating_hours")
+            if operating_hours:
+                # Take Monday's hours as a representative
+                hours = operating_hours.get("monday") or next(iter(operating_hours.values()), None)
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"serpapi-{biz.get('place_id', 'unknown')}",
+                    name=name,
+                    niche=filters.niche or "Business",
+                    country=filters.country or "",
+                    city=filters.city or "",
+                    address=address,
+                    maps_url=f"https://maps.google.com/?q={biz.get('gps_coordinates', {}).get('latitude', 0)},{biz.get('gps_coordinates', {}).get('longitude', 0)}",
+                    rating=float(rating) if rating else None,
+                    reviews_count=int(reviews) if reviews else None,
+                    phone=phone,
+                    email=None,
+                    website=biz.get("website"),
+                    instagram=None,
+                    hours=hours,
+                    description=place_type,
+                )
+            )
+
+        return results
+
+    @staticmethod
+    def _is_chain(name: str) -> bool:
+        """Check if a business name is a known chain."""
+        chain_keywords = [
+            "starbucks", "mcdonald", "subway", "domino", "pizza hut",
+            "burger king", "wendy", "taco bell", "kfc", "papa john",
+            "dunkin", "chick-fil-a", "chipotle", "panera", "applebee",
+            "ihop", "olive garden", "chili", "tgifridays", "outback",
+            "red lobster", "longhorn", "buffalo wild wings", "five guys",
+            "shake shack", "in-n-out", "whataburger", "sonic",
+            "starbucks coffee", "costa coffee", "nero",
+        ]
+        name_lower = name.lower()
+        return any(chain in name_lower for chain in chain_keywords)
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        if not external_ref.startswith("serpapi-"):
+            return None
+        # Details require separate API call; not implemented yet
+        return None
+
+
+class YelpBusinessProvider(BusinessSearchProvider):
+    """Yelp Fusion API for business search with ratings and review counts.
+
+    Free tier: 5,000 requests/day. Provides real ratings and review counts
+    from Yelp's crowd-sourced data, which is what the user sees on yelp.com.
+
+    Trade-offs vs. OSM: real ratings/reviews, but limited geographic coverage
+    (US/Canada/EU primarily), requires API key, and no open data tags.
+    """
+
+    API_URL = "https://api.yelp.com/v3/businesses/search"
+
+    # Map common niche keywords to Yelp category aliases
+    NICHE_TO_CATEGORY: dict[str, str] = {
+        "restaurant": "restaurants",
+        "cafe": "coffee",
+        "coffee": "coffee",
+        "barber": "hair",
+        "hairdresser": "hair",
+        "beauty salon": "beautysvc",
+        "dentist": "dentists",
+        "dental clinic": "dentists",
+        "gym": "gyms",
+        "fitness": "gyms",
+        "hotel": "hotels",
+        "real estate": "realestate",
+        "auto repair": "autorepair",
+        "plumber": "plumbing",
+        "electrician": "electricians",
+        "law firm": "lawyers",
+        "accountant": "accountants",
+        "photographer": "photographers",
+        "construction": "contractors",
+        "cleaning": "homecleaning",
+    }
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def _yelp_category(self, niche: str | None) -> str | None:
+        if not niche:
+            return None
+        return self.NICHE_TO_CATEGORY.get(niche.strip().lower())
+
+    def search(self, filters: BusinessSearchFilters) -> list[BusinessResult]:
+        location_parts = [filters.city, filters.country]
+        location = ", ".join(p for p in location_parts if p)
+        if not location:
+            return []
+
+        params: dict[str, str | int] = {
+            "location": location,
+            "limit": min(filters.limit, 50),
+            "sort_by": "best_match",
+        }
+
+        category = self._yelp_category(filters.niche)
+        if category:
+            params["categories"] = category
+
+        if filters.min_rating is not None:
+            # Yelp doesn't filter by rating in search, but we can sort by
+            # rating and let the caller filter
+            pass
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    self.API_URL,
+                    params=params,
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.HTTPStatusError as exc:
+            raise ProviderError(
+                f"Yelp API error {exc.response.status_code}",
+                code="yelp_http_error",
+            ) from exc
+        except Exception as exc:
+            raise ProviderError(
+                f"Yelp API request failed: {type(exc).__name__}",
+                code="yelp_request_failed",
+            ) from exc
+
+        results: list[BusinessResult] = []
+        for biz in data.get("businesses", []):
+            # Filter by minimum rating if specified
+            if filters.min_rating is not None and (biz.get("rating") or 0) < filters.min_rating:
+                continue
+
+            location = biz.get("location", {})
+            address_parts = [
+                location.get("address1"),
+                location.get("address2"),
+                location.get("address3"),
+            ]
+            address = ", ".join(p for p in address_parts if p) or None
+
+            phone = biz.get("phone") or biz.get("display_phone")
+            # Clean up display phone format
+            if phone and phone.startswith("+1"):
+                phone = phone[2:].strip()
+
+            results.append(
+                BusinessResult(
+                    external_ref=f"yelp-{biz['id']}",
+                    name=biz["name"],
+                    niche=filters.niche or "Business",
+                    country=filters.country or "",
+                    city=location.get("city", filters.city or ""),
+                    address=address,
+                    maps_url=biz.get("url"),
+                    rating=biz.get("rating"),
+                    reviews_count=biz.get("review_count"),
+                    phone=phone,
+                    email=None,  # Yelp doesn't expose email
+                    website=None,  # Yelp doesn't expose website directly
+                    instagram=None,
+                    hours=None,  # Hours available via detail endpoint
+                    description=biz.get("categories", [{}])[0].get("title") if biz.get("categories") else None,
+                )
+            )
+
+        return results
+
+    def get_details(self, external_ref: str) -> BusinessResult | None:
+        if not external_ref.startswith("yelp-"):
+            return None
+        biz_id = external_ref[5:]  # Remove "yelp-" prefix
+
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(
+                    f"https://api.yelp.com/v3/businesses/{biz_id}",
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+                response.raise_for_status()
+                biz = response.json()
+        except Exception:
+            return None
+
+        location = biz.get("location", {})
+        address_parts = [
+            location.get("address1"),
+            location.get("address2"),
+            location.get("address3"),
+        ]
+        address = ", ".join(p for p in address_parts if p) or None
+
+        hours_list = biz.get("hours", [])
+        hours = None
+        if hours_list:
+            # Format hours as "Mo-Fr 09:00-18:00" style
+            today_hours = hours_list[0].get("open", [])
+            if today_hours:
+                hours = today_hours[0].get("start", "") + "-" + today_hours[0].get("end", "")
+
+        return BusinessResult(
+            external_ref=external_ref,
+            name=biz["name"],
+            niche="Business",
+            country=location.get("country", ""),
+            city=location.get("city", ""),
+            address=address,
+            maps_url=biz.get("url"),
+            rating=biz.get("rating"),
+            reviews_count=biz.get("review_count"),
+            phone=biz.get("phone"),
+            email=None,
+            website=biz.get("url"),
+            instagram=None,
+            hours=hours,
+            description=biz.get("categories", [{}])[0].get("title") if biz.get("categories") else None,
+        )
+
+
 class FallbackBusinessProvider(BusinessSearchProvider):
     """Tries each source in turn, so one service's outage is not the product's.
 
@@ -1188,9 +2411,67 @@ def get_business_provider(settings: Settings) -> BusinessSearchProvider:
         return OSMBusinessProvider(contact=settings.osm_contact)
     if settings.business_provider == "nominatim":
         return NominatimBusinessProvider(contact=settings.osm_contact)
+    if settings.business_provider == "photon":
+        return FallbackBusinessProvider(
+            [
+                PhotonBusinessProvider(contact=settings.osm_contact),
+                OSMBusinessProvider(contact=settings.osm_contact),
+            ]
+        )
+    if settings.business_provider == "wikidata":
+        return WikidataBusinessProvider()
+    if settings.business_provider == "opencage":
+        if not settings.opencage_api_key:
+            raise RuntimeError(
+                "BUSINESS_PROVIDER=opencage requires OPENCAGE_API_KEY. "
+                "Get a free key at https://opencagedata.com/api (2,500 req/day)."
+            )
+        return OpenCageBusinessProvider(
+            api_key=settings.opencage_api_key,
+            contact=settings.osm_contact,
+        )
+    if settings.business_provider == "yelp":
+        if not settings.yelp_api_key:
+            raise RuntimeError(
+                "BUSINESS_PROVIDER=yelp requires YELP_API_KEY. "
+                "Get a free key at https://www.yelp.com/developers/v3/manage_app "
+                "(5,000 req/day, provides ratings and review counts)."
+            )
+        return YelpBusinessProvider(api_key=settings.yelp_api_key)
+    if settings.business_provider == "reefapi":
+        if not settings.reefapi_key:
+            raise RuntimeError(
+                "BUSINESS_PROVIDER=reefapi requires REEFAPI_KEY. "
+                "Get a free key at https://reefapi.com "
+                "(1,000 credits free, provides Google Maps ratings, no credit card needed)."
+            )
+        return ReefAPIProvider(api_key=settings.reefapi_key)
+    if settings.business_provider == "multi":
+        # Chain all free sources for maximum global coverage.
+        # Order: OSM (fast, great in EU) → Photon (better geocoding) →
+        # Wikidata (global structured data) → OpenCage (needs key, good in
+        # developing countries). Each source is tried only if the previous
+        # one fails or returns nothing.
+        providers: list[BusinessSearchProvider] = [
+            OSMBusinessProvider(contact=settings.osm_contact),
+            NominatimBusinessProvider(contact=settings.osm_contact),
+            PhotonBusinessProvider(contact=settings.osm_contact),
+            WikidataBusinessProvider(),
+        ]
+        if settings.opencage_api_key:
+            providers.append(
+                OpenCageBusinessProvider(
+                    api_key=settings.opencage_api_key,
+                    contact=settings.osm_contact,
+                )
+            )
+        return FallbackBusinessProvider(providers)
     raise NotImplementedError(
         f"Business provider '{settings.business_provider}' is not implemented. "
         "Supported: 'osm' (free, worldwide, no API key; Overpass with a "
-        "Nominatim fallback), or either source alone as 'overpass' / "
-        "'nominatim'. Add new implementations in app/providers/business.py."
+        "Nominatim fallback), 'overpass', 'nominatim', 'photon' (free, better "
+        "geocoding), 'wikidata' (free, global structured data), 'opencage' "
+        "(free key, 2500 req/day), 'reefapi' (free: 1,000 credits, "
+        "provides Google Maps ratings, no credit card), or 'multi' (chains all free sources). "
+        "Add new implementations in app/providers/business.py."
     )

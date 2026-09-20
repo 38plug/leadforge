@@ -1,58 +1,62 @@
 "use client";
 
-import Link from "next/link";
-import { MapPin, Phone, Mail, Globe, ArrowUpRight } from "lucide-react";
+import { useState } from "react";
+import { MapPin, Phone, Mail, Globe, Save, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LeadStatusBadge, WebsiteStatusBadge } from "@/components/leads/badges";
+import { WebsiteStatusBadge } from "@/components/leads/badges";
 import { ScoreRing } from "@/components/leads/opportunity-score";
-import type { Lead } from "@/types/lead";
+import type { LeadPreview } from "@/types/lead";
 
-/**
- * One discovered business.
- *
- * The card answers the only question that matters at this stage - is this
- * worth my time - by pairing the score with the reasons behind it. Reasons
- * come from the API's score breakdown; nothing is asserted here that the
- * backend did not calculate.
- */
-export function DiscoveryResultCard({ lead }: { lead: Lead }) {
-  const reasons = lead.score.breakdown?.filter((factor) => factor.points > 0).slice(0, 3) ?? [];
+interface DiscoveryResultCardProps {
+  preview: LeadPreview;
+  onSave: (preview: LeadPreview) => Promise<void>;
+}
+
+export function DiscoveryResultCard({ preview, onSave }: DiscoveryResultCardProps) {
+  const [saving, setSaving] = useState(false);
+  const reasons = preview.score.breakdown?.filter((factor) => factor.points > 0).slice(0, 3) ?? [];
   const contacts = [
-    lead.phone ? { icon: Phone, value: lead.phone, label: "Phone" } : null,
-    lead.email ? { icon: Mail, value: lead.email, label: "Email" } : null,
-    lead.website ? { icon: Globe, value: lead.website, label: "Website" } : null,
+    preview.phone ? { icon: Phone, value: preview.phone, label: "Phone" } : null,
+    preview.email ? { icon: Mail, value: preview.email, label: "Email" } : null,
+    preview.website ? { icon: Globe, value: preview.website, label: "Website" } : null,
   ].filter(Boolean) as { icon: typeof Phone; value: string; label: string }[];
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(preview);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <article className="surface surface-interactive group rounded-xl p-4">
       <div className="flex items-start gap-3.5">
-        <ScoreRing score={lead.score.score} size={46} />
+        <ScoreRing score={preview.score.score} size={46} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <Link
-                href={`/leads/${lead.id}`}
-                className="block truncate text-sm font-semibold transition-colors hover:text-primary"
-              >
-                {lead.company}
-              </Link>
+              <h3 className="truncate text-sm font-semibold">
+                {preview.name}
+              </h3>
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-2xs text-subtle-foreground">
                 <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="truncate">
-                  {[lead.city, lead.country].filter(Boolean).join(", ")}
+                  {[preview.city, preview.country].filter(Boolean).join(", ")}
                 </span>
-                {lead.niche && (
+                {preview.niche && (
                   <>
                     <span aria-hidden="true">·</span>
-                    <span className="truncate">{lead.niche}</span>
+                    <span className="truncate">{preview.niche}</span>
                   </>
                 )}
               </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <WebsiteStatusBadge status={lead.websiteStatus} />
+              <WebsiteStatusBadge status={preview.website_status} />
             </div>
           </div>
 
@@ -92,13 +96,26 @@ export function DiscoveryResultCard({ lead }: { lead: Lead }) {
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
-              <LeadStatusBadge status={lead.status} />
-              <Button asChild size="sm" variant="secondary">
-                <Link href={`/leads/${lead.id}`}>
-                  Open
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
+              {preview.saved ? (
+                <Button size="sm" variant="secondary" disabled>
+                  <Check className="h-3.5 w-3.5" />
+                  Saved
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                  Save lead
+                </Button>
+              )}
             </div>
           </div>
         </div>

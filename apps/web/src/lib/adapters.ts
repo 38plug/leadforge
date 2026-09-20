@@ -1,5 +1,5 @@
-import type { ApiLead } from "@/types/api";
-import type { Lead } from "@/types/lead";
+import type { ApiLead, ApiLeadPreview } from "@/types/api";
+import type { Lead, LeadPreview } from "@/types/lead";
 
 /**
  * Maps the API's normalized Lead+Company shape onto the flatter `Lead`
@@ -47,5 +47,33 @@ export function adaptLead(apiLead: ApiLead): Lead {
     createdAt: apiLead.created_at,
     description: company.description ?? undefined,
     hours: company.hours ?? undefined,
+  };
+}
+
+export function adaptLeadPreview(apiPreview: ApiLeadPreview): LeadPreview {
+  return {
+    external_ref: apiPreview.external_ref,
+    name: apiPreview.name,
+    niche: apiPreview.niche,
+    country: apiPreview.country,
+    city: apiPreview.city,
+    address: apiPreview.address,
+    phone: apiPreview.phone,
+    email: apiPreview.email,
+    instagram: apiPreview.instagram,
+    website: apiPreview.website,
+    maps_url: apiPreview.maps_url,
+    rating: apiPreview.rating,
+    reviews_count: apiPreview.reviews_count,
+    hours: apiPreview.hours,
+    description: apiPreview.description,
+    website_status: apiPreview.website_status,
+    score: {
+      score: apiPreview.score.score,
+      breakdown: apiPreview.score.breakdown,
+      recommendation: apiPreview.score.recommendation,
+      priority: apiPreview.score.priority,
+    },
+    saved: false,
   };
 }

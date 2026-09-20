@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Sparkles, Send, Mail, PhoneCall, Instagram, FileText, DollarSign, MessageSquare, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,8 +28,10 @@ const ACTIONS = [
 ];
 
 export default function AiAssistantPage() {
+  const searchParams = useSearchParams();
+  const initialLeadId = searchParams.get("lead") ?? "";
   const { data: leads } = useApi<ApiLead[]>("/api/leads");
-  const [leadId, setLeadId] = useState<string>("");
+  const [leadId, setLeadId] = useState<string>(initialLeadId);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",

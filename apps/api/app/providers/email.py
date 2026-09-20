@@ -8,15 +8,20 @@ provider is ever called, not inside it — so a provider implementation
 should stay a thin transport layer.
 """
 
+import json
+import logging
 import re
 import smtplib
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.message import EmailMessage
+from urllib.request import Request, urlopen
 
 from app.core.config import Settings
 from app.providers.errors import ProviderError
+
+logger = logging.getLogger("leadforge.email")
 
 # Deliberately permissive: this is a typo guard, not an RFC 5322 validator.
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
@@ -30,7 +35,7 @@ class EmailSendResult:
 
 class EmailProvider(ABC):
     @abstractmethod
-    def send(self, to: str, subject: str, body: str, reply_to: str | None = None) -> EmailSendResult:
+    def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
         ...
 
     @abstractmethod
@@ -63,7 +68,7 @@ class SMTPEmailProvider(EmailProvider):
         self.use_tls = use_tls
         self.timeout_seconds = timeout_seconds
 
-    def send(self, to: str, subject: str, body: str, reply_to: str | None = None) -> EmailSendResult:
+    def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
         message = EmailMessage()
         message["From"] = self.from_address
         message["To"] = to
@@ -73,6 +78,8 @@ class SMTPEmailProvider(EmailProvider):
         message_id = f"<{uuid.uuid4()}@leadforge>"
         message["Message-ID"] = message_id
         message.set_content(body)
+        if html:
+            message.add_alternative(html, subtype="html")
 
         try:
             if self.port == 465:
@@ -106,6 +113,63 @@ class SMTPEmailProvider(EmailProvider):
         return bool(_EMAIL_RE.match(email))
 
 
+class ResendEmailProvider(EmailProvider):
+    """Sends email via Resend's HTTP API — no SMTP needed.
+
+    Works on platforms that block outbound SMTP (Render free tier, etc).
+    Requires an API key from https://resend.com and a verified sender domain,
+    or use their default onboarding@resend.dev for testing.
+    """
+
+    API_URL = "https://api.resend.com/emails"
+
+    def __init__(self, api_key: str, from_address: str, timeout_seconds: float = 30.0):
+        self.api_key = api_key
+        self.from_address = from_address
+        self.timeout_seconds = timeout_seconds
+
+    def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
+        payload: dict = {
+            "from": self.from_address,
+            "to": [to],
+            "subject": subject,
+        }
+        if html:
+            payload["html"] = html
+        else:
+            payload["text"] = body
+
+        if reply_to:
+            payload["reply_to"] = reply_to
+
+        data = json.dumps(payload).encode()
+        req = Request(
+            self.API_URL,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(req, timeout=self.timeout_seconds) as resp:
+                body_bytes = resp.read()
+                result = json.loads(body_bytes)
+                message_id = result.get("id", f"resend-{uuid.uuid4()}")
+                return EmailSendResult(provider_message_id=message_id, accepted=True)
+        except Exception as exc:
+            raise ProviderError(
+                "RESEND_API_FAILED",
+                f"Resend API rejected the request: {exc}",
+                retryable=True,
+            ) from exc
+
+    def verify_email(self, email: str) -> bool:
+        return bool(_EMAIL_RE.match(email))
+
+
 class RecordingEmailProvider(EmailProvider):
     """Records outbound mail without sending it, for when SMTP is unconfigured.
 
@@ -114,7 +178,7 @@ class RecordingEmailProvider(EmailProvider):
     rather than implying mail is going out.
     """
 
-    def send(self, to: str, subject: str, body: str, reply_to: str | None = None) -> EmailSendResult:
+    def send(self, to: str, subject: str, body: str, reply_to: str | None = None, html: str | None = None) -> EmailSendResult:
         # Subject and recipient only — never the body, which can carry
         # personal details, and never credentials.
         print(f"[email:not-sent] to={to} subject={subject!r} (configure SMTP_HOST to send for real)")
@@ -122,6 +186,10 @@ class RecordingEmailProvider(EmailProvider):
 
     def verify_email(self, email: str) -> bool:
         return bool(_EMAIL_RE.match(email))
+
+
+def _resend_is_configured(settings: Settings) -> bool:
+    return bool(settings.smtp_password and settings.smtp_password.startswith("re_"))
 
 
 def smtp_is_configured(settings: Settings) -> bool:
@@ -168,6 +236,17 @@ def get_workspace_email_provider(db, workspace_id: str, settings: Settings) -> E
 def get_email_provider(settings: Settings) -> EmailProvider:
     provider = settings.email_provider.lower()
 
+    if provider == "resend" or (provider == "auto" and _resend_is_configured(settings)):
+        if not _resend_is_configured(settings):
+            raise ProviderError(
+                "RESEND_NOT_CONFIGURED",
+                "EMAIL_PROVIDER=resend requires SMTP_PASSWORD to start with 're_' (your Resend API key).",
+            )
+        return ResendEmailProvider(
+            api_key=settings.smtp_password,
+            from_address=settings.email_from_address,
+        )
+
     if provider == "smtp" or (provider == "auto" and smtp_is_configured(settings)):
         if not smtp_is_configured(settings):
             raise ProviderError(
@@ -188,5 +267,5 @@ def get_email_provider(settings: Settings) -> EmailProvider:
 
     raise NotImplementedError(
         f"Email provider '{settings.email_provider}' is not implemented. "
-        "Supported: 'smtp' (works with any mail host) or 'auto'."
+        "Supported: 'smtp', 'resend', or 'auto'."
     )

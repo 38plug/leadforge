@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Shield, ShieldOff, UserX, UserCheck, Trash2, Loader2 } from "lucide-react";
+import { Search, Shield, ShieldOff, UserX, UserCheck, Trash2, Loader2, RotateCcw } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,27 @@ export function AdminAccountsPanel({ currentUserId }: { currentUserId: string })
     } catch (err) {
       toast({
         title: "Could not delete that account",
+        description: err instanceof ApiError ? err.message : "Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function resetUsage(user: AdminUser) {
+    setBusyId(user.id);
+    try {
+      const response = await api.post<{ reset: number; period: string }>(`/api/admin/users/${user.id}/reset-usage`);
+      toast({
+        title: "Usage reset",
+        description: `${response.reset} lead reveals reset for period ${response.period}`,
+        variant: "success",
+      });
+      refetch();
+    } catch (err) {
+      toast({
+        title: "Could not reset usage",
         description: err instanceof ApiError ? err.message : "Please try again.",
         variant: "error",
       });
@@ -226,6 +247,16 @@ export function AdminAccountsPanel({ currentUserId }: { currentUserId: string })
                           <UserCheck className="h-3.5 w-3.5" />
                         )}
                         {user.is_active ? "Disable" : "Enable"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy || isSelf}
+                        title={isSelf ? "You cannot reset your own usage" : "Reset weekly lead allowance"}
+                        onClick={() => resetUsage(user)}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Reset
                       </Button>
                       <Button
                         size="sm"
