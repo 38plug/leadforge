@@ -160,9 +160,18 @@ class ResendEmailProvider(EmailProvider):
                 message_id = result.get("id", f"resend-{uuid.uuid4()}")
                 return EmailSendResult(provider_message_id=message_id, accepted=True)
         except Exception as exc:
+            # Try to extract the actual error message from the response
+            error_detail = str(exc)
+            if hasattr(exc, "read"):
+                try:
+                    error_body = exc.read().decode()
+                    error_detail = error_body
+                except Exception:
+                    pass
+            logger.error("Resend API error: %s", error_detail)
             raise ProviderError(
                 "RESEND_API_FAILED",
-                f"Resend API rejected the request: {exc}",
+                f"Resend API rejected the request: {error_detail}",
                 retryable=True,
             ) from exc
 
