@@ -313,7 +313,7 @@ def _send(settings: Settings, to: str, subject: str, body: str, html: str | None
         logger.error("Transactional email to %s FAILED: %s [%s]", to, exc, type(exc).__name__)
         return False
 
-    delivered = bool(getattr(result, "accepted", False)) and smtp_is_configured(settings)
+    delivered = bool(getattr(result, "accepted", False))
     if not delivered:
         logger.warning(
             "Transactional email to %s was NOT DELIVERED (subject: %r, provider=%s). "
