@@ -112,22 +112,6 @@ def config_status(
 # --------------------------------------------------------------- overview
 
 
-@router.get("/email-config")
-def get_email_config(settings: Settings = Depends(get_settings)):
-    """Show email configuration values (redacted secrets)."""
-    from app.providers.email import _mailjet_is_configured, _resend_is_configured, smtp_is_configured
-    return {
-        "email_provider": settings.email_provider,
-        "email_from_address": repr(settings.email_from_address),
-        "mailjet_configured": _mailjet_is_configured(settings),
-        "mailjet_api_key_present": bool(settings.mailjet_api_key),
-        "mailjet_secret_key_present": bool(settings.mailjet_secret_key),
-        "resend_configured": _resend_is_configured(settings),
-        "smtp_configured": smtp_is_configured(settings),
-        "smtp_host": settings.smtp_host,
-    }
-
-
 @router.post("/test-smtp")
 def test_server_smtp(
     to_email: str = "test@example.com",

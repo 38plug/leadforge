@@ -210,15 +210,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    s = Settings()
-    logger = __import__("logging").getLogger("leadforge.config")
-    logger.info(
-        "Email config: provider=%s from=%s mailjet_key=%s mailjet_secret=%s smtp_host=%s smtp_pass_prefix=%s",
-        s.email_provider,
-        s.email_from_address or "(EMPTY)",
-        "set" if s.mailjet_api_key else "missing",
-        "set" if s.mailjet_secret_key else "missing",
-        s.smtp_host or "missing",
-        (s.smtp_password or "")[:3] if s.smtp_password else "missing",
-    )
-    return s
+    return Settings()
