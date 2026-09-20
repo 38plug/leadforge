@@ -13,7 +13,6 @@ will never receive anything is worse than being told the address is unset.
 
 import logging
 from datetime import datetime, timezone
-from email.utils import formatdate
 
 from app.core.config import Settings
 from app.providers.email import get_email_provider, smtp_is_configured
@@ -313,8 +312,25 @@ def _send(settings: Settings, to: str, subject: str, body: str, html: str | None
         logger.error("Transactional email to %s FAILED: %s [%s]", to, exc, type(exc).__name__)
         return False
 
-    delivered = bool(getattr(result, "accepted", False))
-    if not delivered:
+    # `accepted` is what the provider says it did with the message, and the
+    # recording provider - the one used when no mailbox is configured - says
+    # True. It has accepted the message; it has not sent it. Trusting that
+    # alone made every unsent email report as delivered, so the caller told
+    # people to check an inbox nothing was going to arrive in.
+    #
+    # Both conditions are required: a mailbox must be configured, AND the
+    # provider must have accepted it.
+    configured = smtp_is_configured(settings)
+    delivered = configured and bool(getattr(result, "accepted", False))
+
+    if not configured:
+        logger.warning(
+            "Transactional email to %s was NOT SENT (subject: %r): no mailbox is "
+            "configured. Set SMTP_HOST, SMTP_USERNAME and SMTP_PASSWORD.",
+            to,
+            subject,
+        )
+    elif not delivered:
         logger.warning(
             "Transactional email to %s was NOT DELIVERED (subject: %r, provider=%s). "
             "Check SMTP_HOST / SMTP_USERNAME / SMTP_PASSWORD / EMAIL_FROM_ADDRESS.",

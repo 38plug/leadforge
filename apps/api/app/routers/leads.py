@@ -333,7 +333,6 @@ def analyze_lead(
     workspace: Workspace = Depends(get_current_workspace),
     settings: Settings = Depends(get_settings),
 ):
-    from app.models.misc import AIAnalysis
     from app.providers.ai import LeadContext, get_ai_provider
     from app.services.ai_service import AIService
     lead = _lead_query(db, workspace.id).filter(Lead.id == lead_id).first()

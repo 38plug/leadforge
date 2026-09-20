@@ -63,12 +63,16 @@ def test_changing_a_password_requires_authentication(client, account):
 
 
 def test_an_account_can_be_deleted_with_its_password(client, account, db_session):
+    # Both ids are captured first: reading them off the ORM objects after the
+    # rows are gone raises, which is the test tripping over itself rather than
+    # a real failure.
+    user_id = account.id
     workspace_id = account.memberships[0].workspace_id
     response = client.request(
         "DELETE", "/api/account", json={"password": "OriginalPass1"}, headers=bearer(account)
     )
     assert response.status_code == 204
-    assert db_session.query(User).filter(User.id == account.id).first() is None
+    assert db_session.query(User).filter(User.id == user_id).first() is None
     assert db_session.query(Workspace).filter(Workspace.id == workspace_id).first() is None
 
 

@@ -2,7 +2,9 @@
 Auth / workspace resolution dependencies.
 
 Authentication is a JWT issued by /api/auth/login|register and presented as
-`Authorization: Bearer <token>`.
+either:
+  - An httpOnly cookie named `lf_token` (preferred, XSS-safe), or
+  - `Authorization: Bearer <token>` header (for API clients / backward compat)
 
 `X-User-Email` selects a user without a password and exists only so local
 development and tests can act as a known account. It is refused outright in
@@ -13,7 +15,7 @@ secret. Anyone who could guess one had full read and write access to that
 workspace.
 """
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -22,14 +24,34 @@ from app.db.session import get_db
 from app.models.workspace import User, Workspace, WorkspaceMember
 
 
+def _extract_token(
+    authorization: str | None,
+    lf_token: str | None,
+) -> str | None:
+    """Pull the JWT from the Authorization header first, then the cookie.
+
+    When both are present the header wins so that API clients sending an
+    explicit ``Authorization`` header are never silently downgraded to a
+    stale cookie that a TestClient (or a real browser) kept from an earlier
+    request.
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1]
+    if lf_token:
+        return lf_token
+    return None
+
+
 def get_current_user(
+    request: Request,
     authorization: str | None = Header(default=None),
+    lf_token: str | None = Cookie(default=None),
     x_user_email: str | None = Header(default=None),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> User:
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1]
+    token = _extract_token(authorization, lf_token)
+    if token:
         user_id = decode_access_token(token)
         if not user_id:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")

@@ -91,3 +91,72 @@ def test_no_credentials_falls_back_to_dev_default_user(client, demo_workspace):
     # already exist — it can never impersonate an arbitrary account.
     response = client.get("/api/leads")
     assert response.status_code == 200
+
+
+def test_register_sets_auth_cookie(client):
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "email": "cookie-test@leadforge.dev",
+            "password": "correct-horse-battery",
+            "full_name": "Cookie",
+            "workspace_name": "Cookie Studio",
+        },
+    )
+    assert response.status_code == 201
+    cookies = {c.name: c.value for c in client.cookies.jar}
+    assert "lf_token" in cookies
+    assert len(cookies["lf_token"]) > 20
+
+
+def test_login_sets_auth_cookie(client):
+    client.post(
+        "/api/auth/register",
+        json={
+            "email": "cookielogin@leadforge.dev",
+            "password": "correct-horse-battery",
+            "full_name": "CL",
+            "workspace_name": "CL Studio",
+        },
+    )
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "cookielogin@leadforge.dev", "password": "correct-horse-battery"},
+    )
+    assert response.status_code == 200
+    cookies = {c.name: c.value for c in client.cookies.jar}
+    assert "lf_token" in cookies
+
+
+def test_cookie_auth_works_without_authorization_header(client):
+    client.post(
+        "/api/auth/register",
+        json={
+            "email": "cookieauth@leadforge.dev",
+            "password": "correct-horse-battery",
+            "full_name": "CA",
+            "workspace_name": "CA Studio",
+        },
+    )
+    # The TestClient stores the cookie from register — next request uses it.
+    me = client.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["user"]["email"] == "cookieauth@leadforge.dev"
+
+
+def test_logout_clears_auth_cookie(client):
+    client.post(
+        "/api/auth/register",
+        json={
+            "email": "logouttest@leadforge.dev",
+            "password": "correct-horse-battery",
+            "full_name": "LT",
+            "workspace_name": "LT Studio",
+        },
+    )
+    assert "lf_token" in {c.name: c.value for c in client.cookies.jar}
+
+    response = client.post("/api/auth/logout")
+    assert response.status_code == 204
+    cookies = {c.name: c.value for c in client.cookies.jar}
+    assert "lf_token" not in cookies

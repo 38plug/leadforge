@@ -61,6 +61,15 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_rate_limit_buckets():
+    """Reset the in-memory rate limiter between tests so they don't interfere."""
+    from app.services.rate_limit import _buckets
+    _buckets.clear()
+    yield
+    _buckets.clear()
+
+
 @pytest.fixture()
 def demo_workspace(db_session):
     user = User(email="demo@leadforge.dev", full_name="Demo User")

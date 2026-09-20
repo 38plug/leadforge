@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, ApiError, clearToken, getToken, setToken, setWorkspaceId } from "@/lib/api";
+import { api, ApiError, clearSession, setWorkspaceId } from "@/lib/api";
 import type { ApiUser, ApiWorkspace, AuthResponse, MeResponse } from "@/types/api";
 
 interface AuthContextValue {
@@ -15,7 +15,7 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, fullName: string, workspaceName: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -27,14 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   const loadSession = useCallback(async () => {
-    const token = getToken();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    // Deliberately does not set `loading` back to true: a background refresh
-    // must not drop the whole application into its skeleton state while the
-    // user is reading it.
+    // Cookie is sent automatically with credentials:include — no token check needed.
     try {
       const me = await api.get<MeResponse>("/api/auth/me");
       setUser(me.user);
@@ -42,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setWorkspace(active);
       if (active) setWorkspaceId(active.id);
     } catch {
-      clearToken();
+      clearSession();
       setUser(null);
       setWorkspace(null);
     } finally {
@@ -61,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // while the user is looking somewhere else.
   useEffect(() => {
     function onFocus() {
-      if (getToken()) void loadSession();
+      void loadSession();
     }
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
@@ -72,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadSession]);
 
   const applyAuthResponse = (response: AuthResponse) => {
-    setToken(response.access_token);
+    // Token is set as an httpOnly cookie by the backend — nothing to store client-side.
     setWorkspaceId(response.workspace.id);
     setUser(response.user);
     setWorkspace(response.workspace);
@@ -113,8 +106,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const logout = useCallback(() => {
-    clearToken();
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/api/auth/logout", undefined, { auth: false });
+    } catch {
+      // Even if the server call fails, clear local state.
+    }
+    clearSession();
     setUser(null);
     setWorkspace(null);
   }, []);

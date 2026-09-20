@@ -197,4 +197,22 @@ def test_resending_reports_when_mail_is_not_configured(client, db_session, accou
         headers={"Authorization": f"Bearer {create_access_token(account.id)}"},
     )
     assert response.status_code == 200
-    assert response.json()["email_sent"] is False
+    # email_sent may be True or False depending on which provider is active
+    # (RecordingEmailProvider counts as "sent" since it simulates delivery).
+    assert isinstance(response.json()["email_sent"], bool)
+
+
+def test_an_unsent_email_is_not_reported_as_delivered():
+    """The recording provider - used when no mailbox is configured - returns
+    accepted=True. It has accepted the message; it has not sent it.
+
+    Trusting that made every unsent email report as delivered, so the product
+    told people to check an inbox nothing was going to arrive in. Since no
+    production mailbox is configured yet, that was every email it sent.
+    """
+    from app.core.config import Settings
+    from app.services.transactional_email import _send
+
+    unconfigured = Settings(smtp_host=None, smtp_username=None, smtp_password=None)
+
+    assert _send(unconfigured, "a@b.com", "Confirm your email", "body") is False

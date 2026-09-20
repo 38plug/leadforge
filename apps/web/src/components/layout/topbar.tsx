@@ -49,8 +49,8 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
     };
   }, []);
 
-  function handleLogout() {
-    logout();
+  async function handleLogout() {
+    await logout();
     router.push("/login");
   }
 

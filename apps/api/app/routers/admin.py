@@ -29,8 +29,9 @@ from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.company import Company
 from app.models.lead import Lead
-from app.models.misc import Coupon, CreditPurchase, LeadReveal, Subscription
-from app.models.workspace import User, Workspace, WorkspaceMember, WorkspaceRole
+from app.models.misc import Coupon, LeadReveal, Subscription
+from app.models.workspace import User, Workspace, WorkspaceMember
+from app.services import account_deletion
 from app.schemas.admin import (
     AdminCouponCreate,
     AdminCouponOut,
@@ -454,33 +455,12 @@ def _workspace_out(db: Session, workspace: Workspace) -> AdminWorkspaceOut:
 def _delete_user_and_owned_workspaces(db: Session, user: User) -> None:
     """Remove an account, and any workspace that would be left unreachable.
 
-    Shared here and by self-service deletion so both paths behave identically.
+    Shared with self-service deletion so both paths behave identically. The
+    work itself lives in the account deletion service: fifteen tables point at
+    a workspace and eleven at a user, and the version that lived here handled
+    two of them.
     """
-    memberships = db.query(WorkspaceMember).filter(WorkspaceMember.user_id == user.id).all()
-
-    for membership in memberships:
-        others = (
-            db.query(func.count(WorkspaceMember.id))
-            .filter(
-                WorkspaceMember.workspace_id == membership.workspace_id,
-                WorkspaceMember.user_id != user.id,
-            )
-            .scalar()
-            or 0
-        )
-        db.delete(membership)
-        if others == 0 and membership.role == WorkspaceRole.OWNER:
-            workspace = db.query(Workspace).filter(Workspace.id == membership.workspace_id).first()
-            if workspace:
-                # Cascades to the workspace's members; leads and companies are
-                # removed explicitly because they are not cascade-configured.
-                db.query(Lead).filter(Lead.workspace_id == workspace.id).delete(synchronize_session=False)
-                db.query(Company).filter(Company.workspace_id == workspace.id).delete(
-                    synchronize_session=False
-                )
-                db.delete(workspace)
-
-    db.delete(user)
+    account_deletion.delete_user(db, user)
 
 
 def utcnow_iso() -> str:

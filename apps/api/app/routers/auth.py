@@ -1,11 +1,12 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.deps import get_current_user
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.models.workspace import User, Workspace, WorkspaceMember, WorkspaceRole
 from app.schemas.auth import (
@@ -23,6 +24,25 @@ from app.services.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+COOKIE_NAME = "lf_token"
+COOKIE_MAX_AGE = ACCESS_TOKEN_EXPIRE_MINUTES * 60  # seconds
+
+
+def _set_auth_cookie(response: Response, token: str, settings: Settings) -> None:
+    response.set_cookie(
+        COOKIE_NAME,
+        token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.environment.lower() == "production",
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(COOKIE_NAME, path="/")
+
 
 def _slugify(name: str, db: Session) -> str:
     base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "workspace"
@@ -38,6 +58,7 @@ def _slugify(name: str, db: Session) -> str:
 def register(
     payload: RegisterRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
@@ -96,11 +117,12 @@ def register(
     transactional_email.send_welcome_email(settings, user.email, user.full_name)
 
     token = create_access_token(subject=user.id)
+    _set_auth_cookie(response, token, settings)
     return TokenResponse(access_token=token, user=user, workspace=workspace)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
     check_rate_limit(request, "login", settings.trusted_proxy_hops)
     user = db.query(User).filter(User.email == payload.email).first()
     if not user or not user.hashed_password or not verify_password(payload.password, user.hashed_password):
@@ -122,6 +144,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     )
 
     token = create_access_token(subject=user.id)
+    _set_auth_cookie(response, token, settings)
     return TokenResponse(access_token=token, user=user, workspace=workspace)
 
 
@@ -232,3 +255,11 @@ def reset_password(
     # Sent after the fact: if the reset was not theirs, this is their warning.
     transactional_email.send_password_changed_email(settings, user.email, user.full_name)
     return AuthActionResponse(message="Your password has been changed. You can sign in now.")
+
+
+# ---------------------------------------------------------- logout
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response):
+    _clear_auth_cookie(response)

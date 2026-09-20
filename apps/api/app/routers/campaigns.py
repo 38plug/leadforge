@@ -145,11 +145,27 @@ def unsubscribe(
     db: Session = Depends(get_db),
 ):
     """
-    Public, unauthenticated endpoint — this is the link every outreach
+    Public, unauthenticated endpoint - this is the link every outreach
     email must include. No workspace membership is required to opt out.
+
+    Always answers 204, including for a workspace that does not exist. Two
+    reasons: a recipient clicking a link from an old email should see "you are
+    unsubscribed" rather than an error page, and a different answer for a real
+    workspace id would turn this into a way to test whether one exists.
+
+    No email provider is constructed. Unsubscribing sends nothing, and
+    building one decrypts the workspace's stored SMTP password - which an
+    unauthenticated endpoint has no business doing.
     """
-    service = CampaignService(db, get_workspace_email_provider(db, workspace_id, get_settings()))
-    service.unsubscribe(workspace_id, email)
+    workspace_exists = (
+        db.query(Workspace.id).filter(Workspace.id == workspace_id).first() is not None
+    )
+    if not workspace_exists:
+        # Writing the suppression anyway would violate the foreign key and
+        # return a 500 from a link a recipient clicked in good faith.
+        return
+
+    CampaignService(db, None).unsubscribe(workspace_id, email)
 
 
 @templates_router.get("", response_model=list[EmailTemplateOut])

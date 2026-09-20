@@ -63,7 +63,14 @@ def downgrade() -> None:
 
 
 def _lead_reveals_table(nullable: bool = False) -> sa.Table:
-    """The table as it stands before the change, for SQLite's rebuild."""
+    """The table as it stands before the change, for SQLite's rebuild.
+
+    The indexes have to be declared here too. SQLite implements an ALTER by
+    building a new table and copying into it, and anything absent from this
+    description simply does not come back - which is how the first version of
+    this migration dropped all four indexes on the way past. Postgres was
+    unaffected, because that branch alters in place.
+    """
     return sa.Table(
         'lead_reveals',
         sa.MetaData(),
@@ -76,4 +83,8 @@ def _lead_reveals_table(nullable: bool = False) -> sa.Table:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint('workspace_id', 'lead_id', 'period', name='uq_reveal_workspace_lead_period'),
+        sa.Index('ix_lead_reveals_workspace_id', 'workspace_id'),
+        sa.Index('ix_lead_reveals_lead_id', 'lead_id'),
+        sa.Index('ix_lead_reveals_user_id', 'user_id'),
+        sa.Index('ix_lead_reveals_period', 'period'),
     )

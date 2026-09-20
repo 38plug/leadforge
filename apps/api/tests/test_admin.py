@@ -142,11 +142,12 @@ def test_an_administrator_cannot_lock_themselves_out(client, superuser):
 def test_deleting_an_account_removes_the_workspace_it_solely_owned(
     client, superuser, ordinary_user, db_session
 ):
+    user_id = ordinary_user.id
     workspace_id = ordinary_user.memberships[0].workspace_id
 
-    assert client.delete(f"/api/admin/users/{ordinary_user.id}", headers=bearer(superuser)).status_code == 204
+    assert client.delete(f"/api/admin/users/{user_id}", headers=bearer(superuser)).status_code == 204
 
-    assert db_session.query(User).filter(User.id == ordinary_user.id).first() is None
+    assert db_session.query(User).filter(User.id == user_id).first() is None
     assert db_session.query(Workspace).filter(Workspace.id == workspace_id).first() is None
 
 

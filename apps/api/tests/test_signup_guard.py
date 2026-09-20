@@ -270,3 +270,28 @@ def test_accounts_predating_the_guard_are_not_grouped_together(client, db_sessio
 
     user = db_session.query(User).filter(User.email == "old-a@example.com").first()
     assert _user_out(db_session, user).accounts_from_same_origin == 1
+
+
+def test_the_configured_rule_is_one_account_per_network_forever(client, db_session):
+    """One IP, one account, for all time - not one per week.
+
+    An account created long ago still blocks a new signup from that origin,
+    which is the whole point of a window of 0 and the thing a rolling window
+    would quietly undo.
+    """
+    settings = get_settings()
+    assert settings.max_accounts_per_ip == 1
+    assert settings.accounts_per_ip_window_hours == 0, "0 means no window at all"
+
+    _register(client, "the-one@example.com", ip="203.0.113.200")
+    user = db_session.query(User).filter(User.email == "the-one@example.com").first()
+    # Backdated well beyond any plausible rolling window.
+    user.created_at = datetime(2021, 1, 1, tzinfo=timezone.utc)
+    db_session.commit()
+
+    response = _register(client, "much-later@example.com", ip="203.0.113.200")
+
+    assert response.status_code == 429
+    assert "every" not in response.json()["detail"], (
+        "with no window the message must not promise the limit resets"
+    )

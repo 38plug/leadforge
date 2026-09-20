@@ -126,8 +126,13 @@ class CampaignService:
     def unsubscribe(self, workspace_id: str, email: str) -> None:
         if not self._is_suppressed(workspace_id, email):
             self.db.add(SuppressionEntry(workspace_id=workspace_id, email=email, reason="unsubscribed"))
-        self.db.query(CampaignRecipient).join(Campaign).filter(
-            Campaign.workspace_id == workspace_id,
-            CampaignRecipient.email == email,
-        ).update({"status": RecipientStatus.UNSUBSCRIBED})
+
+        campaign_ids = [
+            c.id for c in self.db.query(Campaign.id).filter(Campaign.workspace_id == workspace_id).all()
+        ]
+        if campaign_ids:
+            self.db.query(CampaignRecipient).filter(
+                CampaignRecipient.campaign_id.in_(campaign_ids),
+                CampaignRecipient.email == email,
+            ).update({"status": RecipientStatus.UNSUBSCRIBED})
         self.db.commit()

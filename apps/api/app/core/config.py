@@ -173,10 +173,16 @@ class Settings(BaseSettings):
     # sign up is refused. They are told to contact support, and raising this
     # value is how support fixes it. Set 0 to disable the limit entirely.
     max_accounts_per_ip: int = 1
-    # Rolling window, in hours. A week by default, matching the allowance
-    # cycle this protects. Set 0 for "ever", which with a limit of 1 means one
-    # account per network for all time.
-    accounts_per_ip_window_hours: int = 168
+    # Rolling window, in hours. 0 means no window at all: every account the
+    # origin has ever opened is counted, so the limit above is for all time
+    # rather than per week. That is the configured rule - one network, one
+    # account, ever.
+    #
+    # It never expires, so it only gets stricter as the table grows: an
+    # address reassigned by an ISP to a new customer carries the old one's
+    # signup with it, and that person cannot register at all. Support raising
+    # MAX_ACCOUNTS_PER_IP is the only way past it.
+    accounts_per_ip_window_hours: int = 0
     # How many proxies sit in front of this application. Render puts exactly
     # one there. The signup guard counts X-Forwarded-For entries from the
     # right by this many, so a caller cannot choose their own apparent

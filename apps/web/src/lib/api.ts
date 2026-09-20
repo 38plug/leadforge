@@ -1,8 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const TOKEN_KEY = "leadforge_token";
 const WORKSPACE_KEY = "leadforge_workspace_id";
-
-let _redirecting = false;
 
 export class ApiError extends Error {
   status: number;
@@ -17,19 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-}
-
-export function clearToken() {
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(WORKSPACE_KEY);
-}
+let _redirecting = false;
 
 export function getWorkspaceId(): string | null {
   if (typeof window === "undefined") return null;
@@ -38,6 +23,10 @@ export function getWorkspaceId(): string | null {
 
 export function setWorkspaceId(id: string) {
   window.localStorage.setItem(WORKSPACE_KEY, id);
+}
+
+export function clearSession() {
+  window.localStorage.removeItem(WORKSPACE_KEY);
 }
 
 interface RequestOptions extends RequestInit {
@@ -52,13 +41,15 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   };
 
   if (auth) {
-    const token = getToken();
-    if (token) finalHeaders["Authorization"] = `Bearer ${token}`;
     const workspaceId = getWorkspaceId();
     if (workspaceId) finalHeaders["X-Workspace-Id"] = workspaceId;
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...rest, headers: finalHeaders });
+  const response = await fetch(`${API_URL}${path}`, {
+    ...rest,
+    headers: finalHeaders,
+    credentials: "include",
+  });
 
   if (response.status === 204) {
     return undefined as T;
@@ -69,7 +60,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (response.status === 401 && auth && !_redirecting) {
     _redirecting = true;
-    clearToken();
+    clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.href = "/login";
     }
