@@ -36,7 +36,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
       DEBUG: "false"
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       SECRET_ENCRYPTION_KEY: ${SECRET_ENCRYPTION_KEY:-}
       CORS_ORIGINS: '["http://localhost:3000"]'
       # Real business data, free and worldwide. ENVIRONMENT=production above

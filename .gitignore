@@ -34,6 +34,7 @@ Thumbs.db
 .env*
 
 # Local agent tooling and Neon Functions scaffolding (kept on disk, not part of the product)
+.agents/
 .claude/
 skills-lock.json
 neon.ts

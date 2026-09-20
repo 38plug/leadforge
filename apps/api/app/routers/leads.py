@@ -271,13 +271,11 @@ def save_leads(
                         url=f"https://instagram.com/{preview.instagram}",
                     )
                 )
-
-        website_row = Website(
-            company_id=company.id,
-            website_url=preview.website,
-            status=preview.website_status,
-        )
-        db.add(website_row)
+            db.add(Website(
+                company_id=company.id,
+                website_url=preview.website,
+                status=preview.website_status,
+            ))
 
         lead = Lead(
             workspace_id=workspace.id,
