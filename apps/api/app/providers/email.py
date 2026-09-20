@@ -229,7 +229,7 @@ class MailjetEmailProvider(EmailProvider):
         if reply_to:
             payload["Headers"] = {"Reply-To": reply_to}
 
-        data = json.dumps(payload).encode()
+        data = json.dumps({"Messages": [payload]}).encode()
         credentials = base64.b64encode(f"{self.api_key}:{self.secret_key}".encode()).decode()
         req = Request(
             self.API_URL,
