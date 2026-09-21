@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo-mark";
 
 /**
@@ -105,18 +107,36 @@ export function AuthLayout({
 export function AuthField({
   id,
   label,
+  type,
   ...props
 }: { id: string; label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const isPassword = type === "password";
+  const [visible, setVisible] = useState(false);
+
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
         {label}
       </label>
-      <input
-        id={id}
-        className="h-10 rounded-md border border-input bg-background/60 px-3 text-sm text-foreground transition-colors placeholder:text-subtle-foreground hover:border-border-strong focus:border-primary/50 focus:bg-background"
-        {...props}
-      />
+      <div className="relative">
+        <input
+          id={id}
+          type={isPassword && visible ? "text" : type}
+          className="h-10 w-full rounded-md border border-input bg-background/60 px-3 pr-10 text-sm text-foreground transition-colors placeholder:text-subtle-foreground hover:border-border-strong focus:border-primary/50 focus:bg-background"
+          {...props}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setVisible((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-subtle-foreground transition-colors hover:text-foreground"
+            aria-label={visible ? "Hide password" : "Show password"}
+          >
+            {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

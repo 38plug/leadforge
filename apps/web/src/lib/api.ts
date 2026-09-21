@@ -33,6 +33,19 @@ interface RequestOptions extends RequestInit {
   auth?: boolean;
 }
 
+function extractErrorMessage(body: unknown): string {
+  if (!body || typeof body !== "object") return "Request failed";
+  const obj = body as Record<string, unknown>;
+  const raw = obj.detail ?? obj.message;
+  if (typeof raw === "string") return raw;
+  // FastAPI validation errors: [{type, loc, msg, input, ctx}, ...]
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0] as Record<string, unknown>;
+    if (first.msg) return String(first.msg);
+  }
+  return "Request failed — please try again";
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
   const finalHeaders: Record<string, string> = {
@@ -68,8 +81,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
-    const message = body?.detail || body?.message || `Request failed with status ${response.status}`;
-    throw new ApiError(response.status, typeof message === "string" ? message : JSON.stringify(message), body?.code, body?.retryable);
+    throw new ApiError(response.status, extractErrorMessage(body), body?.code, body?.retryable);
   }
 
   return body as T;

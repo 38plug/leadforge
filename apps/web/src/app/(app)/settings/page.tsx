@@ -13,7 +13,7 @@ import { api, ApiError } from "@/lib/api";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import type { ApiUsage, ApiWorkspaceMember } from "@/types/api";
-import { Trash2, AlertTriangle, Compass } from "lucide-react";
+import { Trash2, AlertTriangle, Compass, KeyRound } from "lucide-react";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { EmailSettings } from "@/components/settings/email-settings";
 import { BillingPanel } from "@/components/settings/billing-panel";
@@ -57,6 +57,7 @@ export default function SettingsPage() {
   const [savingWorkspace, setSavingWorkspace] = useState(false);
   const [clearConfirmText, setClearConfirmText] = useState("");
   const [clearing, setClearing] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   async function handleSaveWorkspace() {
     setSavingWorkspace(true);
@@ -107,6 +108,19 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleResetPassword() {
+    if (!user?.email) return;
+    setResettingPassword(true);
+    try {
+      await api.post("/api/auth/forgot-password", { email: user.email }, { auth: false });
+      toast({ title: "Reset link sent", description: `Check your inbox at ${user.email}`, variant: "success" });
+    } catch (err) {
+      toast({ title: "Couldn't send reset link", description: err instanceof ApiError ? err.message : undefined, variant: "error" });
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -146,6 +160,25 @@ export default function SettingsPage() {
             </div>
             <Button className="w-fit" onClick={handleSaveWorkspace} disabled={savingWorkspace}>
               Save Changes
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === "general" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-muted-foreground" />
+              <CardTitle>Reset Password</CardTitle>
+            </div>
+            <CardDescription>
+              We&apos;ll send a password reset link to <span className="font-medium text-foreground">{user?.email}</span>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-fit gap-2" onClick={handleResetPassword} disabled={resettingPassword}>
+              {resettingPassword ? "Sending..." : "Send reset link"}
             </Button>
           </CardContent>
         </Card>

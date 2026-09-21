@@ -15,12 +15,19 @@ export default function RegisterPage() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setSubmitting(true);
     try {
       await register(email, password, fullName, workspaceName);
@@ -46,24 +53,26 @@ export default function RegisterPage() {
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-        <AuthField
-          id="full-name"
-          label="Your name"
-          required
-          autoComplete="name"
-          value={fullName}
-          onChange={(event) => setFullName(event.target.value)}
-          placeholder="Alex Moreira"
-        />
-        <AuthField
-          id="workspace"
-          label="Workspace name"
-          required
-          autoComplete="organization"
-          value={workspaceName}
-          onChange={(event) => setWorkspaceName(event.target.value)}
-          placeholder="Moreira Studio"
-        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <AuthField
+            id="full-name"
+            label="Your name"
+            required
+            autoComplete="name"
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            placeholder="Alex Moreira"
+          />
+          <AuthField
+            id="workspace"
+            label="Workspace name"
+            required
+            autoComplete="organization"
+            value={workspaceName}
+            onChange={(event) => setWorkspaceName(event.target.value)}
+            placeholder="Moreira Studio"
+          />
+        </div>
         <AuthField
           id="email"
           label="Email"
@@ -84,6 +93,17 @@ export default function RegisterPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="At least 8 characters"
+        />
+        <AuthField
+          id="confirm-password"
+          label="Confirm password"
+          type="password"
+          required
+          minLength={8}
+          autoComplete="new-password"
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          placeholder="Re-enter your password"
         />
 
         {error && (
