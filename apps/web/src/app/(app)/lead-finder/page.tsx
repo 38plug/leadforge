@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Search, Loader2, SlidersHorizontal, Radar, Globe2, Info, AlertTriangle } from "lucide-react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import { Search, Loader2, SlidersHorizontal, Radar, Globe2, Info, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,8 @@ const SEARCH_STEPS = [
   "Scoring opportunities",
 ];
 
+const RESULTS_PER_PAGE = 25;
+
 export default function DiscoverPage() {
   const { toast } = useToast();
   const [country, setCountry] = useState("");
@@ -62,6 +64,8 @@ export default function DiscoverPage() {
   const [searchedLocation, setSearchedLocation] = useState("");
   const [searchedNiche, setSearchedNiche] = useState("");
   const [usage, setUsage] = useState<ApiUsage | null>(null);
+  const [searchLimit, setSearchLimit] = useState(50);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     api.get<ApiUsage>("/api/workspace/usage").then(setUsage).catch(() => {});
@@ -77,6 +81,7 @@ export default function DiscoverPage() {
     setStep(0);
     setHasSearched(false);
     setSearchError(null);
+    setPage(1);
     setSearchedLocation([city.trim(), country].filter(Boolean).join(", ") || "anywhere");
     setSearchedNiche(effectiveNiche);
 
@@ -91,6 +96,7 @@ export default function DiscoverPage() {
       custom_niche: customNiche || undefined,
       website_status: websiteStatus !== "ANY" ? websiteStatus : undefined,
       min_score: minScore || undefined,
+      limit: searchLimit,
     };
 
     try {
@@ -109,7 +115,7 @@ export default function DiscoverPage() {
       clearInterval(stepTimer);
       setSearching(false);
     }
-  }, [country, city, niche, customNiche, websiteStatus, minScore, canSearch, toast]);
+  }, [country, city, niche, customNiche, websiteStatus, minScore, searchLimit, canSearch, toast]);
 
   const handleSaveLead = useCallback(async (preview: LeadPreview) => {
     try {
@@ -130,6 +136,13 @@ export default function DiscoverPage() {
 
   const noWebsiteCount = results.filter((lead) => lead.website_status === "NO_WEBSITE").length;
   const strongCount = results.filter((lead) => lead.score.score >= 80).length;
+
+  const totalPages = Math.max(1, Math.ceil(results.length / RESULTS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedResults = useMemo(
+    () => results.slice((safePage - 1) * RESULTS_PER_PAGE, safePage * RESULTS_PER_PAGE),
+    [results, safePage]
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -243,6 +256,15 @@ export default function DiscoverPage() {
               </div>
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <label className="label-caps" htmlFor="results-limit">Results to fetch</label>
+              <Select id="results-limit" value={searchLimit} onChange={(e) => setSearchLimit(Number(e.target.value))}>
+                <option value={25}>25 leads</option>
+                <option value={50}>50 leads</option>
+                <option value={100}>100 leads</option>
+              </Select>
+            </div>
+
             <Button onClick={runSearch} disabled={searching || !canSearch} className="w-full">
               {searching ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -328,13 +350,42 @@ export default function DiscoverPage() {
             )}
 
             {!searching && !searchError && results.length > 0 && (
-              <ul className="stagger flex flex-col gap-2.5">
-                {results.map((preview) => (
-                  <li key={preview.external_ref}>
-                    <DiscoveryResultCard preview={preview} onSave={handleSaveLead} />
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul className="stagger flex flex-col gap-2.5">
+                  {paginatedResults.map((preview) => (
+                    <li key={preview.external_ref}>
+                      <DiscoveryResultCard preview={preview} onSave={handleSaveLead} />
+                    </li>
+                  ))}
+                </ul>
+                {totalPages > 1 && (
+                  <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                    <p className="text-2xs text-subtle-foreground">
+                      Page {safePage} of {totalPages} ({results.length} results)
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safePage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safePage >= totalPages}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      >
+                        Next
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

@@ -169,6 +169,7 @@ export interface LeadSearchFilters {
   require_instagram?: boolean;
   min_score?: number;
   radius_km?: number;
+  limit?: number;
 }
 
 export interface ApiLeadPreview {

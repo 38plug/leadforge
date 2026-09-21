@@ -146,7 +146,7 @@ def search_leads(
             min_rating=filters.min_rating,
             min_reviews=filters.min_reviews,
             max_reviews=filters.max_reviews,
-            limit=25,
+            limit=min(filters.limit, 100),
         )
     )
     website_checks = _check_websites_concurrently(website_provider, businesses)

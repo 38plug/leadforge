@@ -102,6 +102,7 @@ class LeadSearchFilters(BaseModel):
     require_instagram: bool = False
     min_score: int = 0
     radius_km: float | None = None
+    limit: int = 50
 
 
 class LeadSearchRequest(BaseModel):
