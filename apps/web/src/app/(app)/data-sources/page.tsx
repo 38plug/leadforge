@@ -149,11 +149,10 @@ export default function DataSourcesPage() {
       </Card>
 
       <p className="text-center text-xs text-muted-foreground">
-        Business data ©{" "}
-        <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline hover:text-foreground">
-          OpenStreetMap contributors
+        Business data by{" "}
+        <a href="https://www.leadforgeinc.com" target="_blank" rel="noreferrer" className="underline hover:text-foreground">
+          LeadForge INC
         </a>
-        , available under the Open Database License.
       </p>
     </div>
   );

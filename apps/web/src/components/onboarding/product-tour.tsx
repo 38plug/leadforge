@@ -32,7 +32,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     icon: Search,
     title: "Lead Finder",
-    body: "Where leads come from. Pick a country and city anywhere in the world, choose a niche, and LeadForge pulls real businesses from OpenStreetMap — then checks whether each one actually has a working website.",
+    body: "Where leads come from. Pick a country and city anywhere in the world, choose a niche, and LeadForge pulls real businesses from our database — then checks whether each one actually has a working website.",
   },
   {
     icon: Users,
@@ -67,7 +67,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     icon: Database,
     title: "Data Sources",
-    body: "Shows which providers are powering the app. Business data is free via OpenStreetMap by default — swap in a paid provider here later without changing anything else.",
+    body: "Shows which providers are powering the app. Business data is free via LeadForge INC by default — swap in a paid provider here later without changing anything else.",
   },
   {
     icon: Settings,

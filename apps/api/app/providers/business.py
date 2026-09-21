@@ -626,8 +626,8 @@ class OSMBusinessProvider(BusinessSearchProvider):
         raise ProviderError(
             code="PROVIDER_UNAVAILABLE",
             message=(
-                "OpenStreetMap's free search service is not responding right now — this is "
-                "an outage on their side, not a problem with your filters. It usually clears "
+                "Our free search service is not responding right now — this is "
+                "an outage on our data source's side, not a problem with your filters. It usually clears "
                 "within a few minutes, so try again shortly. A smaller city or a specific "
                 "niche also makes the query lighter and more likely to succeed."
             ),

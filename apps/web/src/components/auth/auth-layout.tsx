@@ -60,7 +60,7 @@ export function AuthLayout({
 
           <ul className="auth-enter-3 mt-8 flex flex-col gap-3">
             {[
-              "Real businesses from OpenStreetMap — never invented",
+              "Real businesses from LeadForge INC — never invented",
               "Website status checked live, not guessed",
               "A transparent score that shows its reasoning",
             ].map((point) => (
@@ -77,7 +77,7 @@ export function AuthLayout({
         </div>
 
         <p className="relative text-2xs text-subtle-foreground">
-          Business data © OpenStreetMap contributors
+          Business data by LeadForge INC
         </p>
       </aside>
 

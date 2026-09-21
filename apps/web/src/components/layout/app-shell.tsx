@@ -62,12 +62,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <footer className="border-t border-border px-6 py-3 text-center text-2xs text-subtle-foreground">
             Business data ©{" "}
             <a
-              href="https://www.openstreetmap.org/copyright"
+              href="https://www.leadforgeinc.com"
               target="_blank"
               rel="noreferrer"
               className="underline underline-offset-2 hover:text-foreground"
             >
-              OpenStreetMap contributors
+              LeadForge INC
             </a>
           </footer>
         </main>

@@ -49,13 +49,13 @@ def list_providers(
                 "key": "business",
                 "name": "Business Search",
                 "description": "Discovers real businesses by country, city and niche.",
-                "active": "OpenStreetMap — free, worldwide, no API key"
+                "active": "LeadForge INC — free, worldwide, no API key"
                 if business_live
                 else f"{settings.business_provider} (not a real data source)",
                 "live": business_live,
                 "env_var": "BUSINESS_PROVIDER",
-                "note": "Real names, addresses, phone numbers, websites and social links contributed by "
-                "OpenStreetMap mappers. No star ratings or review counts — OSM does not track them.",
+                "note": "Real names, addresses, phone numbers, websites and social links from "
+                "LeadForge INC's database. No star ratings or review counts — our data source does not track them.",
             },
             {
                 "key": "website",
@@ -70,7 +70,7 @@ def list_providers(
                 "key": "social",
                 "name": "Social Profiles",
                 "description": "Public social links attached to a business.",
-                "active": "OpenStreetMap tags",
+                "active": "LeadForge INC tags",
                 "live": business_live,
                 "env_var": "—",
                 "note": "Read from each business's own public contact:instagram / contact:facebook tags. "

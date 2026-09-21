@@ -41,7 +41,7 @@ const SCORE_OPTIONS = [
 ];
 
 const SEARCH_STEPS = [
-  "Querying OpenStreetMap",
+  "Querying LeadForge INC",
   "Checking website status",
   "Scoring opportunities",
 ];
@@ -148,7 +148,7 @@ export default function DiscoverPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Discover opportunities"
-        description="Find real businesses that may need a better web presence. Results come from OpenStreetMap and are checked live."
+        description="Find real businesses that may need a better web presence. Results come from LeadForge INC and are checked live."
       />
 
       {usage?.quota_exhausted && (
@@ -313,7 +313,7 @@ export default function DiscoverPage() {
                 <div className="rounded-lg border border-border bg-background/40 p-4">
                   <ProgressSteps steps={SEARCH_STEPS} activeIndex={step} />
                   <p className="mt-3 border-t border-border pt-3 text-2xs text-subtle-foreground">
-                    Live searches against OpenStreetMap can take up to a minute.
+                    Live searches against LeadForge INC can take up to a minute.
                   </p>
                 </div>
                 <SkeletonRows rows={4} />
