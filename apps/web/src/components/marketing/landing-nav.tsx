@@ -9,29 +9,15 @@ const LINKS = [
 
 export function LandingNav() {
   return (
-    <div className="sticky top-4 z-50 mx-auto w-full max-w-5xl relative">
-      {/* ambient glow behind the pill */}
-      <div
-        className="animate-nav-glow pointer-events-none absolute left-1/2 top-1/2 -z-10 h-24 w-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
-        style={{
-          background:
-            "linear-gradient(90deg, hsl(var(--glow-strong) / 0.55), hsl(var(--glow-soft) / 0.4) 50%, hsl(var(--glow-strong) / 0.55))",
-        }}
-      />
+    <div className="sticky top-4 z-50 mx-auto w-full max-w-5xl">
+      <header className="glass relative rounded-2xl px-4 py-3">
+        {/* subtle top-edge highlight */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px rounded-2xl bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-      {/* animated gradient border ring */}
-      <header
-        className="animate-border-shift relative rounded-full p-[1.5px] shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)]"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, hsl(var(--glow-strong) / 0.9), hsl(var(--glow-soft) / 0.9), hsl(var(--glow-strong) / 0.9))",
-          backgroundSize: "200% 100%",
-        }}
-      >
-        <div className="flex items-center justify-between gap-4 rounded-full bg-[#08090C]/95 px-3 py-2 backdrop-blur-xl">
-          <Link href="/" className="group flex items-center gap-2.5 pl-2">
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/" className="group flex items-center gap-2.5">
             <div className="transition-transform duration-300 group-hover:scale-110">
-              <LogoMark size={30} />
+              <LogoMark size={28} />
             </div>
             <span className="text-[15px] font-semibold tracking-tight text-white">LeadForge</span>
           </Link>
@@ -41,7 +27,7 @@ export function LandingNav() {
               <a
                 key={link.href}
                 href={link.href}
-                className="relative rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white"
+                className="relative rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-white/50 transition-all duration-200 hover:bg-white/[0.06] hover:text-white"
               >
                 {link.label}
               </a>
@@ -51,13 +37,13 @@ export function LandingNav() {
           <div className="flex items-center gap-2">
             <Link
               href="/login"
-              className="hidden rounded-full px-3.5 py-1.5 text-[13px] font-medium text-white/80 transition-colors hover:text-white sm:inline-flex"
+              className="hidden rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-white/60 transition-colors hover:text-white sm:inline-flex"
             >
               Log in
             </Link>
             <Link
               href="/register"
-              className="animate-pulse-glow inline-flex items-center rounded-full bg-gradient-brand px-4 py-1.5 text-[13px] font-bold text-brand-ink transition-transform hover:scale-[1.06]"
+              className="sheen inline-flex items-center rounded-lg bg-gradient-brand px-4 py-2 text-[13px] font-bold text-brand-ink transition-all hover:scale-[1.04] hover:shadow-[0_0_20px_-4px_hsl(var(--glow-strong)/0.6)]"
             >
               Open app
             </Link>

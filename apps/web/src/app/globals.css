@@ -3,57 +3,50 @@
 @tailwind utilities;
 
 /* ======================================================================
-   LeadForge design tokens
+   LeadForge — Premium Dark UI System
 
-   Dark-first: the product is a working surface people keep open all day,
-   so the interface recedes and the data carries the colour. Violet is
-   reserved for things that are actionable or scored - navigation state,
-   primary actions, opportunity - which is what makes it read as signal
-   rather than decoration.
+   Deep black foundation with electric lime (#C8FF3D) as the strategic
+   accent. The interface should feel like an AI operating system:
+   futuristic, cinematic, alive.
 
-   Every value is a channel triple so Tailwind can compose opacity
-   (bg-primary/15). Both :root and .dark carry the same palette: the app
-   renders dark everywhere, and duplicating them means no flash before
-   the class lands.
+   Every value is a channel triple so Tailwind can compose opacity.
    ====================================================================== */
 
 :root,
 .dark {
   /* --- ground ------------------------------------------------------ */
-  --background: 225 20% 4%;          /* near-black, the page itself     */
-  --surface: 230 16% 8%;             /* panels sitting on the page      */
-  --surface-elevated: 228 16% 11%;   /* menus, popovers, raised cards   */
+  --background: 240 6% 3%;            /* #050505 — near-black          */
+  --surface: 240 5% 6%;               /* #0C0C0D — panels              */
+  --surface-elevated: 240 5% 8%;      /* #141415 — menus, popovers     */
 
-  --card: 230 16% 8%;
-  --card-foreground: 240 9% 96%;
-  --popover: 228 16% 11%;
-  --popover-foreground: 240 9% 96%;
+  --card: 240 5% 6%;
+  --card-foreground: 0 0% 96%;
+  --popover: 240 5% 8%;
+  --popover-foreground: 0 0% 96%;
 
   /* --- text -------------------------------------------------------- */
-  --foreground: 240 9% 96%;          /* primary copy                    */
-  --muted-foreground: 228 7% 62%;    /* secondary copy                  */
-  --subtle-foreground: 228 7% 45%;   /* labels, timestamps, hints       */
+  --foreground: 0 0% 96%;             /* #F5F5F5 — primary copy        */
+  --muted-foreground: 0 0% 63%;       /* #A0A0A0 — secondary copy      */
+  --subtle-foreground: 0 0% 40%;      /* #666666 — labels, hints       */
 
   /* --- lines and fills --------------------------------------------- */
-  --border: 228 14% 17%;             /* ~8% white over the background   */
-  --border-strong: 228 14% 24%;
-  --input: 228 14% 17%;
-  --muted: 228 13% 13%;
-  --secondary: 228 14% 14%;
-  --secondary-foreground: 240 9% 96%;
-  --accent: 228 16% 15%;
-  --accent-foreground: 240 9% 96%;
+  --border: 0 0% 10%;                 /* rgba(255,255,255,0.07) equiv  */
+  --border-strong: 0 0% 16%;
+  --input: 0 0% 12%;
+  --muted: 0 0% 10%;
+  --secondary: 0 0% 10%;
+  --secondary-foreground: 0 0% 96%;
+  --accent: 0 0% 9%;
+  --accent-foreground: 0 0% 96%;
 
-  /* --- accent ------------------------------------------------------ */
-  --primary: 258 90% 66%;
-  --primary-foreground: 0 0% 100%;
-  --ring: 258 90% 66%;
-  --violet: 258 90% 66%;
+  /* --- accent — electric lime -------------------------------------- */
+  --primary: 82 100% 61%;             /* #C8FF3D                       */
+  --primary-foreground: 240 6% 3%;    /* dark text on lime             */
+  --ring: 82 100% 61%;
+  --violet: 82 100% 61%;
 
   /* --- semantic ---------------------------------------------------- */
-  /* Muted on purpose: a lead table shows dozens of these at once, and
-     saturated status colours turn a working screen into a warning light. */
-  --success: 158 52% 46%;
+  --success: 152 60% 48%;
   --success-foreground: 0 0% 100%;
   --warning: 38 84% 56%;
   --warning-foreground: 225 20% 6%;
@@ -61,14 +54,10 @@
   --destructive-foreground: 0 0% 100%;
 
   /* --- glow -------------------------------------------------------- */
-  /* Consumed by the existing motion utilities, so every glow in the app
-     follows the accent without those rules needing to know about it. */
-  --glow-strong: 258 90% 66%;
-  --glow-soft: 272 80% 62%;
+  --glow-strong: 82 100% 61%;         /* lime glow                     */
+  --glow-soft: 95 80% 55%;           /* warm lime for gradients        */
 
   /* --- geometry ---------------------------------------------------- */
-  /* 14px for panels; the scale below derives tighter radii for controls
-     so a button inside a card never looks rounder than the card. */
   --radius: 0.875rem;
 }
 
@@ -85,24 +74,29 @@ body {
   color: hsl(var(--foreground));
 }
 
+/* ---- scrollbar ---------------------------------------------------- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--border));
+  background: hsl(0 0% 100% / 0.08);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
+  background: hsl(0 0% 100% / 0.16);
 }
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* ======================================================================
+   Brand utilities
+   ====================================================================== */
 
 .text-gradient-brand {
   background-image: linear-gradient(135deg, hsl(var(--glow-strong)), hsl(var(--glow-soft)));
@@ -116,33 +110,52 @@ body {
 }
 
 .text-brand-ink {
-  /* Label colour for anything sitting on the accent gradient. */
-  color: hsl(0 0% 100%);
+  color: hsl(240 6% 3%);
 }
 
 .bg-gradient-brand-wash {
-  background-image: linear-gradient(135deg, hsl(var(--glow-strong) / 0.16), hsl(var(--glow-soft) / 0.16));
+  background-image: linear-gradient(135deg, hsl(var(--glow-strong) / 0.12), hsl(var(--glow-soft) / 0.08));
 }
 
 .glow-ring {
-  box-shadow: 0 0 0 1px hsl(var(--border)), 0 0 56px -10px hsl(var(--glow-strong) / 0.6);
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 0 60px -8px hsl(var(--glow-strong) / 0.5);
 }
 
 .glow-btn {
-  box-shadow: 0 6px 24px -10px hsl(var(--glow-strong) / 0.85);
+  box-shadow: 0 4px 20px -6px hsl(var(--glow-strong) / 0.7);
 }
 
+.glow-card {
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, background-color 0.3s ease;
+}
 .glow-card:hover {
-  border-color: hsl(var(--glow-strong) / 0.4);
-  box-shadow: 0 0 46px -16px hsl(var(--glow-strong) / 0.55);
+  border-color: hsl(var(--glow-strong) / 0.3);
+  box-shadow: 0 0 50px -12px hsl(var(--glow-strong) / 0.4);
 }
 
+/* ======================================================================
+   Motion system — CSS only, no JS dependencies
+   ====================================================================== */
+
+/* --- ambient loops ------------------------------------------------- */
 @media (prefers-reduced-motion: no-preference) {
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
   .animate-pulse-glow {
-    animation: pulse-glow 2.6s ease-in-out infinite;
+    animation: pulse-glow 2.8s ease-in-out infinite;
+  }
+  .animate-nav-glow {
+    animation: nav-glow 5s ease-in-out infinite;
+  }
+  .animate-border-shift {
+    animation: border-shift 6s linear infinite;
+  }
+  .animate-breathe {
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+  .animate-orbit {
+    animation: orbit 18s linear infinite;
   }
 }
 
@@ -152,179 +165,61 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 24px -4px hsl(var(--glow-strong) / 0.65); }
-  50% { box-shadow: 0 0 46px -4px hsl(var(--glow-strong) / 0.95); }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .animate-nav-glow {
-    animation: nav-glow 5s ease-in-out infinite;
-  }
-  .animate-border-shift {
-    animation: border-shift 6s linear infinite;
-  }
-}
-
-/* ---- welcome overlay (post sign-up) ---- */
-@media (prefers-reduced-motion: no-preference) {
-  .animate-welcome-pop {
-    animation: welcome-pop 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  }
-  .animate-welcome-rise {
-    animation: welcome-rise 0.9s ease-out 0.7s both;
-  }
-  .animate-welcome-rise-delayed {
-    animation: welcome-rise 0.9s ease-out 1.3s both;
-  }
-  .animate-welcome-bar {
-    animation: welcome-bar 4.4s cubic-bezier(0.4, 0, 0.2, 1) 0.6s both;
-  }
-}
-
-/* Without motion, everything is simply visible and static. */
-@media (prefers-reduced-motion: reduce) {
-  .animate-welcome-bar { width: 100%; }
-}
-
-@keyframes welcome-pop {
-  0% { transform: scale(0.4) rotate(-18deg); opacity: 0; }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes welcome-rise {
-  0% { transform: translateY(14px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes welcome-bar {
-  0% { width: 0%; }
-  100% { width: 100%; }
+  0%, 100% { box-shadow: 0 0 20px -2px hsl(var(--glow-strong) / 0.5); }
+  50% { box-shadow: 0 0 40px -2px hsl(var(--glow-strong) / 0.8); }
 }
 
 @keyframes nav-glow {
-  0%, 100% { opacity: 0.55; transform: translateX(-50%) scale(1); }
-  50% { opacity: 0.9; transform: translateX(-50%) scale(1.06); }
+  0%, 100% { opacity: 0.4; transform: translateX(-50%) scale(1); }
+  50% { opacity: 0.7; transform: translateX(-50%) scale(1.04); }
 }
 
-/* ======================================================================
-   App motion system
+@keyframes border-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
 
-   Everything here is opt-in via a class, sits behind
-   prefers-reduced-motion, and animates only transform/opacity/filter so
-   it stays off the layout path. Entrances end at a visible resting
-   state — nothing is parked at opacity:0 waiting on a script.
-   ====================================================================== */
+@keyframes breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
 
-/* --- entrances ------------------------------------------------------ */
+@keyframes orbit {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- entrances ----------------------------------------------------- */
 @media (prefers-reduced-motion: no-preference) {
   .animate-rise-in {
-    animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .animate-fade-in {
-    animation: fade-in 0.45s ease-out both;
+    animation: fade-in 0.5s ease-out both;
   }
   .animate-scale-in {
     animation: scale-in 0.4s cubic-bezier(0.34, 1.4, 0.64, 1) both;
   }
   .animate-slide-in-left {
-    animation: slide-in-left 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: slide-in-left 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* Stagger children of a list or grid: each item starts slightly later,
-     so a page assembles itself instead of snapping in all at once. */
   .stagger > * {
-    animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: rise-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
-  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
-  .stagger > *:nth-child(2) { animation-delay: 0.06s; }
-  .stagger > *:nth-child(3) { animation-delay: 0.10s; }
-  .stagger > *:nth-child(4) { animation-delay: 0.14s; }
-  .stagger > *:nth-child(5) { animation-delay: 0.18s; }
-  .stagger > *:nth-child(6) { animation-delay: 0.22s; }
-  .stagger > *:nth-child(7) { animation-delay: 0.26s; }
-  .stagger > *:nth-child(8) { animation-delay: 0.30s; }
-  .stagger > *:nth-child(n + 9) { animation-delay: 0.34s; }
-}
-
-/* --- interaction ---------------------------------------------------- */
-/* Transitions are safe outside the motion query: with reduced motion the
-   browser still honours the user's setting for these. */
-.lift {
-  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.22s ease, border-color 0.22s ease;
-}
-.lift:hover {
-  transform: translateY(-3px);
-  border-color: hsl(var(--glow-strong) / 0.45);
-  box-shadow: 0 10px 34px -14px hsl(var(--glow-strong) / 0.6);
-}
-
-.press {
-  transition: transform 0.12s ease;
-}
-.press:active {
-  transform: scale(0.97);
-}
-
-/* A row that responds to the cursor without shifting the table layout. */
-.row-hover {
-  transition: background-color 0.18s ease, box-shadow 0.18s ease;
-}
-.row-hover:hover {
-  background-color: hsl(var(--glow-strong) / 0.06);
-  box-shadow: inset 3px 0 0 hsl(var(--glow-strong) / 0.65);
-}
-
-/* Sweep of light across a button on hover. */
-.sheen {
-  position: relative;
-  overflow: hidden;
-}
-.sheen::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 20%, hsl(0 0% 100% / 0.22) 50%, transparent 80%);
-  transform: translateX(-120%);
-  pointer-events: none;
-}
-@media (prefers-reduced-motion: no-preference) {
-  .sheen:hover::after {
-    animation: sheen-sweep 0.75s ease-out;
-  }
-}
-
-/* --- ambient -------------------------------------------------------- */
-@media (prefers-reduced-motion: no-preference) {
-  .animate-breathe {
-    animation: breathe 4.5s ease-in-out infinite;
-  }
-  .animate-orbit {
-    animation: orbit 18s linear infinite;
-  }
-  /* Loading placeholder that reads as "working", not "broken". */
-  .shimmer {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted)) 25%,
-      hsl(var(--glow-strong) / 0.14) 37%,
-      hsl(var(--muted)) 63%
-    );
-    background-size: 400% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  .animate-count-up {
-    animation: count-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-}
-
-/* Static fallbacks so nothing depends on animation to be visible. */
-@media (prefers-reduced-motion: reduce) {
-  .shimmer { background: hsl(var(--muted)); }
+  .stagger > *:nth-child(1) { animation-delay: 0.04s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.08s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.12s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.16s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.20s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.24s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.28s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.32s; }
+  .stagger > *:nth-child(n + 9) { animation-delay: 0.36s; }
 }
 
 @keyframes rise-in {
-  0% { transform: translateY(10px); opacity: 0; }
+  0% { transform: translateY(12px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
 }
 
@@ -343,19 +238,105 @@ body {
   100% { transform: translateX(0); opacity: 1; }
 }
 
+/* --- welcome overlay ----------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .animate-welcome-pop {
+    animation: welcome-pop 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .animate-welcome-rise {
+    animation: rise-in 0.9s ease-out 0.7s both;
+  }
+  .animate-welcome-rise-delayed {
+    animation: rise-in 0.9s ease-out 1.3s both;
+  }
+  .animate-welcome-bar {
+    animation: welcome-bar 4.4s cubic-bezier(0.4, 0, 0.2, 1) 0.6s both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-welcome-bar { width: 100%; }
+}
+
+@keyframes welcome-pop {
+  0% { transform: scale(0.4) rotate(-18deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes welcome-bar {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+/* --- interactions -------------------------------------------------- */
+.lift {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.lift:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--glow-strong) / 0.35);
+  box-shadow: 0 10px 34px -14px hsl(var(--glow-strong) / 0.5);
+}
+
+.press {
+  transition: transform 0.12s ease;
+}
+.press:active {
+  transform: scale(0.97);
+}
+
+.row-hover {
+  transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+.row-hover:hover {
+  background-color: hsl(var(--glow-strong) / 0.04);
+  box-shadow: inset 3px 0 0 hsl(var(--glow-strong) / 0.6);
+}
+
+/* Sweep of light across a button on hover. */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 20%, hsl(0 0% 100% / 0.18) 50%, transparent 80%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheen:hover::after {
+    animation: sheen-sweep 0.7s ease-out;
+  }
+}
+
 @keyframes sheen-sweep {
   0% { transform: translateX(-120%); }
   100% { transform: translateX(120%); }
 }
 
-@keyframes breathe {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.04); }
+/* --- loading ------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--glow-strong) / 0.1) 37%,
+      hsl(var(--muted)) 63%
+    );
+    background-size: 400% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+  .animate-count-up {
+    animation: count-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
 }
 
-@keyframes orbit {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { background: hsl(var(--muted)); }
 }
 
 @keyframes shimmer {
@@ -368,67 +349,45 @@ body {
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-@keyframes border-shift {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
-}
-
-
 /* ======================================================================
    Surfaces
-
-   Depth comes from three things stacked in a fixed order - a slightly
-   lighter fill, a hairline top edge catching the light, and a shadow
-   underneath. Keeping that order consistent is what makes panels read as
-   physical rather than as boxes with borders.
    ====================================================================== */
 
-/* A panel that sits on the page. The inset highlight is a single hairline
-   along the top edge, which is what separates it from the background far
-   more cheaply than a heavy border would. */
 .surface {
   background: hsl(var(--surface));
   border: 1px solid hsl(var(--border));
   box-shadow:
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
-    0 1px 2px 0 hsl(0 0% 0% / 0.4);
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.03),
+    0 1px 3px 0 hsl(0 0% 0% / 0.5);
 }
 
-/* Menus, popovers, command palette: things that float above the page. */
 .surface-elevated {
   background: hsl(var(--surface-elevated));
   border: 1px solid hsl(var(--border-strong));
   box-shadow:
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
-    0 16px 48px -12px hsl(0 0% 0% / 0.7);
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
+    0 16px 48px -12px hsl(0 0% 0% / 0.75);
 }
 
-/* Translucent panel for anything overlaying content. Used sparingly:
-   blur is expensive and, applied everywhere, reads as a gimmick. */
 .glass {
-  background: hsl(var(--surface) / 0.72);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
-  border: 1px solid hsl(0 0% 100% / 0.08);
+  background: hsl(0 0% 4% / 0.7);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid hsl(0 0% 100% / 0.06);
 }
 
-/* Interactive panel: the border warms toward the accent on hover, which
-   signals "this does something" without moving the layout. */
 .surface-interactive {
-  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease;
 }
 .surface-interactive:hover {
-  border-color: hsl(var(--glow-strong) / 0.35);
+  border-color: hsl(var(--glow-strong) / 0.25);
   background: hsl(var(--surface-elevated));
   box-shadow:
-    inset 0 1px 0 0 hsl(0 0% 100% / 0.05),
-    0 8px 28px -14px hsl(var(--glow-strong) / 0.45);
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.04),
+    0 8px 28px -14px hsl(var(--glow-strong) / 0.35);
 }
 
-/* ---- ambient ------------------------------------------------------- */
-
-/* A single soft violet bloom, placed behind a hero or an empty state.
-   One per screen: several at once flattens all of them. */
+/* ---- ambient ------------------------------------------------------ */
 .ambient-glow {
   position: relative;
 }
@@ -439,24 +398,20 @@ body {
   height: 340px;
   background: radial-gradient(
     ellipse at 50% 0%,
-    hsl(var(--glow-strong) / 0.16),
+    hsl(var(--glow-strong) / 0.12),
     transparent 70%
   );
   pointer-events: none;
   z-index: 0;
 }
 
-/* Faint technical grid. Deliberately near-invisible - it should register
-   as texture, never as a pattern competing with the data. */
 .grid-bg {
   background-image:
-    linear-gradient(to right, hsl(0 0% 100% / 0.022) 1px, transparent 1px),
-    linear-gradient(to bottom, hsl(0 0% 100% / 0.022) 1px, transparent 1px);
+    linear-gradient(to right, hsl(0 0% 100% / 0.018) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(0 0% 100% / 0.018) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 
-/* Breaks up banding across large dark gradients, which is visible on
-   wide displays without it. */
 .noise {
   position: relative;
 }
@@ -464,33 +419,26 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.22;
+  opacity: 0.18;
   pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 }
 
-/* ---- text ---------------------------------------------------------- */
-
-/* Numbers that should be read as figures: tabular so columns align, and
-   tightened because large numerals default to looking loose. */
+/* ---- text --------------------------------------------------------- */
 .numeric {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
-/* Small uppercase label above a value or a section. */
 .label-caps {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: hsl(var(--subtle-foreground));
 }
 
-/* ---- focus --------------------------------------------------------- */
-
-/* One visible focus treatment for everything reachable by keyboard.
-   :focus-visible only, so it appears for keyboard users and not on click. */
+/* ---- focus -------------------------------------------------------- */
 .focus-ring:focus-visible,
 button:focus-visible,
 a:focus-visible,
@@ -505,15 +453,116 @@ textarea:focus-visible,
 }
 
 /* ======================================================================
+   Hero particle canvas — CSS-only particle field
+   ====================================================================== */
+
+.hero-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-particles .particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: hsl(var(--glow-strong) / 0.6);
+}
+
+.hero-particles .particle-lg {
+  width: 3px;
+  height: 3px;
+  background: hsl(var(--glow-strong) / 0.8);
+  box-shadow: 0 0 6px hsl(var(--glow-strong) / 0.5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-particles .particle {
+    animation: particle-drift linear infinite;
+  }
+  .hero-particles .particle:nth-child(1) { top: 12%; left: 8%; animation-duration: 18s; animation-delay: 0s; }
+  .hero-particles .particle:nth-child(2) { top: 25%; left: 22%; animation-duration: 22s; animation-delay: -3s; }
+  .hero-particles .particle:nth-child(3) { top: 40%; left: 35%; animation-duration: 16s; animation-delay: -6s; }
+  .hero-particles .particle:nth-child(4) { top: 18%; left: 55%; animation-duration: 20s; animation-delay: -2s; }
+  .hero-particles .particle:nth-child(5) { top: 55%; left: 70%; animation-duration: 24s; animation-delay: -8s; }
+  .hero-particles .particle:nth-child(6) { top: 32%; left: 85%; animation-duration: 19s; animation-delay: -4s; }
+  .hero-particles .particle:nth-child(7) { top: 68%; left: 15%; animation-duration: 21s; animation-delay: -7s; }
+  .hero-particles .particle:nth-child(8) { top: 75%; left: 45%; animation-duration: 17s; animation-delay: -1s; }
+  .hero-particles .particle:nth-child(9) { top: 48%; left: 92%; animation-duration: 23s; animation-delay: -5s; }
+  .hero-particles .particle:nth-child(10) { top: 82%; left: 60%; animation-duration: 15s; animation-delay: -9s; }
+  .hero-particles .particle:nth-child(11) { top: 8%; left: 72%; animation-duration: 25s; animation-delay: -3s; }
+  .hero-particles .particle:nth-child(12) { top: 60%; left: 5%; animation-duration: 20s; animation-delay: -6s; }
+  .hero-particles .particle:nth-child(13) { top: 35%; left: 48%; animation-duration: 18s; animation-delay: -2s; }
+  .hero-particles .particle:nth-child(14) { top: 88%; left: 30%; animation-duration: 22s; animation-delay: -8s; }
+  .hero-particles .particle:nth-child(15) { top: 15%; left: 40%; animation-duration: 16s; animation-delay: -4s; }
+  .hero-particles .particle:nth-child(16) { top: 70%; left: 80%; animation-duration: 21s; animation-delay: -7s; }
+  .hero-particles .particle:nth-child(17) { top: 45%; left: 12%; animation-duration: 19s; animation-delay: -1s; }
+  .hero-particles .particle:nth-child(18) { top: 5%; left: 90%; animation-duration: 24s; animation-delay: -5s; }
+  .hero-particles .particle:nth-child(19) { top: 90%; left: 50%; animation-duration: 17s; animation-delay: -9s; }
+  .hero-particles .particle:nth-child(20) { top: 50%; left: 28%; animation-duration: 20s; animation-delay: -3s; }
+
+  .hero-particles .particle-lg:nth-child(21) { top: 20%; left: 30%; animation-duration: 26s; animation-delay: -2s; }
+  .hero-particles .particle-lg:nth-child(22) { top: 60%; left: 65%; animation-duration: 22s; animation-delay: -6s; }
+  .hero-particles .particle-lg:nth-child(23) { top: 40%; left: 80%; animation-duration: 28s; animation-delay: -4s; }
+  .hero-particles .particle-lg:nth-child(24) { top: 75%; left: 20%; animation-duration: 20s; animation-delay: -8s; }
+}
+
+@keyframes particle-drift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translate(12px, -18px) scale(1.2);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-8px, 8px) scale(0.8);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translate(16px, 12px) scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+/* ---- hero network lines (CSS-only) -------------------------------- */
+.hero-network {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hero-network .line {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--glow-strong) / 0.2), transparent);
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-network .line {
+    animation: line-pulse 4s ease-in-out infinite;
+  }
+  .hero-network .line:nth-child(1) { top: 30%; left: 10%; width: 120px; transform: rotate(15deg); animation-delay: 0s; }
+  .hero-network .line:nth-child(2) { top: 45%; left: 25%; width: 160px; transform: rotate(-8deg); animation-delay: -1s; }
+  .hero-network .line:nth-child(3) { top: 60%; left: 45%; width: 100px; transform: rotate(22deg); animation-delay: -2s; }
+  .hero-network .line:nth-child(4) { top: 35%; left: 60%; width: 140px; transform: rotate(-15deg); animation-delay: -0.5s; }
+  .hero-network .line:nth-child(5) { top: 55%; left: 75%; width: 110px; transform: rotate(10deg); animation-delay: -1.5s; }
+  .hero-network .line:nth-child(6) { top: 25%; left: 40%; width: 130px; transform: rotate(-20deg); animation-delay: -3s; }
+  .hero-network .line:nth-child(7) { top: 70%; left: 20%; width: 90px; transform: rotate(5deg); animation-delay: -2.5s; }
+  .hero-network .line:nth-child(8) { top: 50%; left: 85%; width: 120px; transform: rotate(-12deg); animation-delay: -1s; }
+}
+
+@keyframes line-pulse {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.45; }
+}
+
+/* ======================================================================
    Sign-in atmosphere
-
-   A slow violet bloom drifting behind the sign-in panel. Deliberately long
-   cycles - 18 and 24 seconds - so it reads as light moving rather than as
-   something animating at you. Anything quicker competes with the form,
-   which is what people actually came to use.
-
-   Two layers on different periods so they drift in and out of phase and the
-   loop never announces itself.
    ====================================================================== */
 @media (prefers-reduced-motion: no-preference) {
   .aurora-slow {
@@ -522,19 +571,47 @@ textarea:focus-visible,
   .aurora-slower {
     animation: aurora-drift-alt 24s ease-in-out infinite;
   }
-  /* The headline and its supporting points arrive in sequence, unhurried
-     enough to be watched rather than caught. */
   .auth-enter-1 { animation: rise-in 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both; }
   .auth-enter-2 { animation: rise-in 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.55s both; }
   .auth-enter-3 { animation: rise-in 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.95s both; }
 }
 
 @keyframes aurora-drift {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
-  50%      { transform: translate3d(8%, 6%, 0) scale(1.18); opacity: 0.85; }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.45; }
+  50%      { transform: translate3d(8%, 6%, 0) scale(1.15); opacity: 0.7; }
 }
 
 @keyframes aurora-drift-alt {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1.1); opacity: 0.4; }
-  50%      { transform: translate3d(-10%, -8%, 0) scale(1); opacity: 0.7; }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.1); opacity: 0.35; }
+  50%      { transform: translate3d(-10%, -8%, 0) scale(1); opacity: 0.6; }
+}
+
+/* ======================================================================
+   Scroll reveal — IntersectionObserver-driven
+   Elements with [data-reveal] start invisible and animate in when
+   they enter the viewport. No JS library needed — just a tiny
+   observer script at the bottom of the landing page.
+   ====================================================================== */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  filter: blur(4px);
+}
+
+[data-reveal].revealed {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
 }

@@ -97,7 +97,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <LogoMark size={24} />
           </span>
           {!collapsed && (
-            <span className="text-[15px] font-semibold tracking-tight">LeadForge</span>
+            <span className="text-[15px] font-bold tracking-tight">LeadForge</span>
           )}
         </Link>
       </div>

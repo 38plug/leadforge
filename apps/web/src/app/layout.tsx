@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 // Tints the browser chrome on mobile to match the app's own ground, so the
 // status bar does not sit as a white band above a near-black interface.
 export const viewport: Viewport = {
-  themeColor: "#08090C",
+  themeColor: "#050505",
 };
 
 export default function RootLayout({
