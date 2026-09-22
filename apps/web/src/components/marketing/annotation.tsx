@@ -18,11 +18,11 @@ export function Annotation({
       className={`cinematic-annotation flex items-center gap-2 ${className}`}
       style={{ animationDelay: `${delay}s` }}
     >
-      <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/[0.15]">
+      <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/[0.25]">
         {label}
       </span>
       {line && (
-        <span className="h-px flex-1 bg-white/[0.06]" />
+        <span className="h-px flex-1 bg-white/[0.1]" />
       )}
     </div>
   );
@@ -60,17 +60,17 @@ export function FloatingAnnotation({
         <span
           className="h-1.5 w-1.5 rounded-full"
           style={{
-            background: dotColor || "hsl(82 100% 61% / 0.35)",
-            boxShadow: `0 0 6px ${dotColor || "hsl(82 100% 61% / 0.2)"}`,
+            background: dotColor || "hsl(82 100% 61% / 0.6)",
+            boxShadow: `0 0 8px ${dotColor || "hsl(82 100% 61% / 0.35)"}`,
           }}
         />
-        <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/[0.18]">
+        <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/[0.3]">
           {label}
         </span>
         {value && (
           <>
-            <span className="h-px w-4 bg-white/[0.08]" />
-            <span className="text-[8px] font-bold tabular-nums tracking-wider text-white/[0.25]">
+            <span className="h-px w-4 bg-white/[0.12]" />
+            <span className="text-[8px] font-bold tabular-nums tracking-wider text-white/[0.4]">
               {value}
             </span>
           </>
