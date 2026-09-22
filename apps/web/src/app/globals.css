@@ -854,9 +854,10 @@ input:focus-visible,
   position: relative;
 }
 .instrument-rail-item:hover {
-  color: hsl(0 0% 100% / 0.55);
-  background: hsl(0 0% 100% / 0.04);
-  box-shadow: 0 0 12px -2px hsl(82 100% 61% / 0.12);
+  color: hsl(82 100% 61%);
+  background: hsl(82 100% 61% / 0.08);
+  border-radius: 6px;
+  box-shadow: 0 0 16px -2px hsl(82 100% 61% / 0.3), 0 0 32px -4px hsl(82 100% 61% / 0.15);
 }
 .instrument-rail-item.active {
   color: hsl(82 100% 61%);
