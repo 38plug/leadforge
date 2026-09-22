@@ -689,3 +689,72 @@ input:focus-visible,
 .text-glow-amber {
   text-shadow: 0 0 40px hsl(28 85% 55% / 0.2), 0 0 80px hsl(28 85% 55% / 0.08);
 }
+
+/* ======================================================================
+   Auth Canvas — Cinematic Entrance Sequence
+   ====================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  .auth-headline-line {
+    opacity: 0;
+    transform: translateY(30px);
+    filter: blur(6px);
+    animation: auth-line-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .auth-headline-support {
+    opacity: 0;
+    animation: auth-fade-in 0.7s ease-out forwards;
+  }
+  .auth-panel-enter {
+    opacity: 0;
+    transform: translateY(50px) scale(0.97);
+    filter: blur(3px);
+    animation: auth-panel-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+  }
+  .auth-panel-fields > * {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: auth-field-in 0.5s ease-out forwards;
+  }
+  .auth-panel-fields > *:nth-child(1) { animation-delay: 0.7s; }
+  .auth-panel-fields > *:nth-child(2) { animation-delay: 0.82s; }
+  .auth-panel-fields > *:nth-child(3) { animation-delay: 0.94s; }
+  .auth-panel-fields > *:nth-child(4) { animation-delay: 1.06s; }
+  .auth-panel-fields > *:nth-child(5) { animation-delay: 1.18s; }
+  .auth-panel-fields > *:nth-child(6) { animation-delay: 1.30s; }
+  .auth-panel-fields > *:nth-child(7) { animation-delay: 1.42s; }
+  .auth-panel-fields > *:nth-child(8) { animation-delay: 1.54s; }
+  .auth-panel-fields > *:nth-child(9) { animation-delay: 1.66s; }
+  .auth-panel-fields > *:nth-child(10) { animation-delay: 1.78s; }
+  .auth-annotation {
+    opacity: 0;
+    animation: auth-fade-in 0.6s ease-out forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-headline-line,
+  .auth-headline-support,
+  .auth-panel-enter,
+  .auth-panel-fields > *,
+  .auth-annotation {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    animation: none;
+  }
+}
+@keyframes auth-line-in {
+  0% { opacity: 0; transform: translateY(30px); filter: blur(6px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes auth-fade-in {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-panel-in {
+  0% { opacity: 0; transform: translateY(50px) scale(0.97); filter: blur(3px); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes auth-field-in {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
