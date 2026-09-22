@@ -18,7 +18,7 @@ from app.models.workspace import (
     WorkspaceMember,
     WorkspaceRole,
 )
-from app.providers.email import get_workspace_email_provider
+from app.providers.email import email_is_configured, get_email_provider, get_workspace_email_provider
 from app.providers.errors import ProviderError
 from app.schemas.auth import WorkspaceOut
 from app.schemas.workspace import (
@@ -287,10 +287,14 @@ def test_email_settings(
         .filter(WorkspaceEmailSettings.workspace_id == workspace.id)
         .first()
     )
-    if row is None:
+
+    if row is not None:
+        provider = get_workspace_email_provider(db, workspace.id, settings)
+    elif email_is_configured(settings):
+        provider = get_email_provider(settings)
+    else:
         raise HTTPException(status_code=400, detail="Connect a mailbox first.")
 
-    provider = get_workspace_email_provider(db, workspace.id, settings)
     if not provider.verify_email(payload.to):
         raise HTTPException(status_code=400, detail=f"{payload.to} is not a valid email address.")
 
@@ -302,7 +306,7 @@ def test_email_settings(
                 f"This is a test message from the {workspace.name} workspace.\n\n"
                 "If you are reading this, your outreach mailbox is connected correctly.\n"
             ),
-            reply_to=row.reply_to,
+            reply_to=row.reply_to if row else None,
         )
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
