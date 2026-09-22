@@ -66,7 +66,7 @@ export function CRMSection() {
     <section ref={sectionRef} className="relative border-t border-white/[0.04] py-24">
       <div data-reveal className="mb-12">
         <span className="label-caps text-primary">05 / Pipeline</span>
-        <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
+        <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white text-glow-lime">
           EVERY<br />OPPORTUNITY.<br />ONE PLACE.
         </h2>
       </div>

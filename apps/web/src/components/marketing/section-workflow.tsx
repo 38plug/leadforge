@@ -45,7 +45,7 @@ export function WorkflowSection() {
     <section ref={sectionRef} className="relative border-t border-white/[0.04] py-24">
       <div data-reveal className="mb-16 text-center">
         <span className="label-caps text-primary">LeadForge Engine</span>
-        <h2 className="mt-5 text-[clamp(1.8rem,4vw,3rem)] font-bold tracking-[-0.02em] text-white">
+        <h2 className="mt-5 text-[clamp(1.8rem,4vw,3rem)] font-bold tracking-[-0.02em] text-white text-glow-lime">
           The autonomous client acquisition machine
         </h2>
         <p className="mx-auto mt-4 max-w-md text-[13px] text-white/30">

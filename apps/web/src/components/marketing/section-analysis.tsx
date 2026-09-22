@@ -40,7 +40,7 @@ export function AnalysisSection() {
         {/* LEFT: Editorial text */}
         <div data-reveal className="flex flex-col justify-center">
           <span className="label-caps text-primary">03 / AI Analysis</span>
-          <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
+          <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white text-glow-lime">
             KNOW<br />WHY THEY<br />NEED YOU.
           </h2>
           <p className="mt-6 max-w-sm text-[13px] leading-relaxed text-white/30">

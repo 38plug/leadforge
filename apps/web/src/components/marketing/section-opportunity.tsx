@@ -110,7 +110,7 @@ export function OpportunitySection() {
         {/* RIGHT: Editorial text + breakdown */}
         <div data-reveal className="flex flex-col justify-center">
           <span className="label-caps text-primary">02 / Intelligence Engine</span>
-          <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
+          <h2 className="mt-5 text-[clamp(2rem,5vw,4rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white text-glow-lime">
             FIND<br />THE<br />OPPORTUNITY.
           </h2>
           <p className="mt-6 max-w-sm text-[13px] leading-relaxed text-white/30">
