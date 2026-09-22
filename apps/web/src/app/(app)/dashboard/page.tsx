@@ -12,18 +12,21 @@ import {
   Sparkles,
   ArrowRight,
 } from "lucide-react";
-import { MetricCard } from "@/components/dashboard/metric-card";
 import { AcquisitionChart, PipelineFunnelChart } from "@/components/dashboard/charts";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LeadStatusBadge, WebsiteStatusBadge } from "@/components/leads/badges";
 import { ScoreRing } from "@/components/leads/opportunity-score";
-import { SectionHeading } from "@/components/layout/page-header";
 import { ErrorState, EmptyState, SkeletonCards, SkeletonRows } from "@/components/ui/state";
 import { useApi } from "@/lib/use-api";
 import { useAuth } from "@/lib/auth-context";
 import { adaptLead } from "@/lib/adapters";
 import type { ApiAnalytics, ApiLead, ApiTimeseries } from "@/types/api";
+import {
+  InstrumentPanel,
+  MetricInstrument,
+  StatusLine,
+  SectionIndex,
+} from "@/components/layout/app-instruments";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -45,49 +48,10 @@ export default function OverviewPage() {
   const error = leadsError || analyticsError || seriesError;
   const firstName = (user?.full_name || user?.email || "").split(/[\s@]/)[0];
 
-  const hero = (
-    <section className="ambient-glow relative overflow-hidden rounded-xl">
-      <div className="grid-bg relative rounded-xl border border-border bg-surface px-6 py-7">
-        <p className="text-2xs font-medium uppercase tracking-[0.08em] text-primary">
-          {greeting()}
-          {firstName ? `, ${firstName}` : ""}
-        </p>
-        <h2 className="mt-2 max-w-xl text-2xl font-semibold leading-tight tracking-tight sm:text-[28px]">
-          Your acquisition workspace is ready.
-        </h2>
-        <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground">
-          Find local businesses without a decent web presence, see why each one is worth your time,
-          and turn the best of them into conversations.
-        </p>
-        <div className="mt-5 flex flex-wrap items-center gap-2">
-          <Button asChild>
-            <Link href="/lead-finder">
-              <Radar className="h-4 w-4" />
-              Discover businesses
-            </Link>
-          </Button>
-          <Button asChild variant="secondary">
-            <Link href="/crm">
-              <KanbanSquare className="h-4 w-4" />
-              Open pipeline
-            </Link>
-          </Button>
-          <Button asChild variant="ghost">
-            <Link href="/campaigns">
-              Create campaign
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-      </div>
-    </section>
-  );
-
   if (loading) {
     return (
-      <div className="flex flex-col gap-6">
-        {hero}
-        <SkeletonCards count={5} />
+      <div className="flex flex-col gap-4">
+        <SkeletonCards count={4} />
         <SkeletonRows rows={6} />
       </div>
     );
@@ -95,9 +59,8 @@ export default function OverviewPage() {
 
   if (error) {
     return (
-      <div className="flex flex-col gap-6">
-        {hero}
-        <Card>
+      <div className="flex flex-col gap-4">
+        <InstrumentPanel>
           <ErrorState
             title="Your workspace data could not be loaded"
             message={error}
@@ -107,7 +70,7 @@ export default function OverviewPage() {
               refetchSeries();
             }}
           />
-        </Card>
+        </InstrumentPanel>
       </div>
     );
   }
@@ -116,20 +79,31 @@ export default function OverviewPage() {
 
   if (leads.length === 0) {
     return (
-      <div className="flex flex-col gap-6">
-        {hero}
-        <Card>
+      <div className="flex flex-col gap-4">
+        {/* Header */}
+        <div className="dash-enter">
+          <h1 className="text-[clamp(1.8rem,4vw,2.8rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+            {greeting()}
+            {firstName ? <>, <span className="text-gradient-brand">{firstName}</span></> : ""}
+          </h1>
+          <p className="mt-3 max-w-lg text-[13px] leading-relaxed text-white/35">
+            Your acquisition workspace is ready. Find local businesses without a decent web presence,
+            see why each one is worth your time, and turn the best of them into conversations.
+          </p>
+        </div>
+
+        <InstrumentPanel className="dash-enter dash-enter-delay-1">
           <EmptyState
             icon={Radar}
             title="No leads yet"
-            description="Your next client could be one search away. Pick a city and an industry, and LeadForge will find businesses that need a better website."
+            description="Your next client could be one search away. Pick a city and an industry."
             action={
               <Button asChild>
                 <Link href="/lead-finder">Discover businesses</Link>
               </Button>
             }
           />
-        </Card>
+        </InstrumentPanel>
       </div>
     );
   }
@@ -140,202 +114,182 @@ export default function OverviewPage() {
     ["CONTACTED", "REPLIED", "INTERESTED", "MEETING", "PROPOSAL"].includes(lead.status)
   );
   const won = leads.filter((lead) => lead.status === "WON");
-
   const topOpportunities = [...leads].sort((a, b) => b.score.score - a.score.score).slice(0, 6);
 
-  // Score distribution, computed from the leads actually loaded.
   const bands = [
-    { label: "High", range: "80-100", count: highOpportunity.length, tone: "bg-primary" },
-    {
-      label: "Medium",
-      range: "60-79",
-      count: leads.filter((l) => l.score.score >= 60 && l.score.score < 80).length,
-      tone: "bg-warning",
-    },
-    {
-      label: "Low",
-      range: "0-59",
-      count: leads.filter((l) => l.score.score < 60).length,
-      tone: "bg-border-strong",
-    },
+    { label: "High", range: "80-100", count: highOpportunity.length, color: "hsl(82 100% 61%)" },
+    { label: "Medium", range: "60-79", count: leads.filter((l) => l.score.score >= 60 && l.score.score < 80).length, color: "hsl(38 84% 56%)" },
+    { label: "Low", range: "0-59", count: leads.filter((l) => l.score.score < 60).length, color: "hsl(0 0% 100% / 0.15)" },
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      {hero}
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <MetricCard label="Total leads" value={leads.length} icon={Users} href="/leads" />
-        <MetricCard
-          label="High opportunity"
-          value={highOpportunity.length}
-          icon={Flame}
-          href="/leads"
-          accent
-        />
-        <MetricCard label="Needs a website" value={noWebsite.length} icon={Globe2} href="/leads" />
-        <MetricCard label="Outreach active" value={outreachActive.length} icon={Send} href="/crm" />
-        <MetricCard label="Won" value={won.length} icon={Trophy} href="/crm" />
+    <div className="flex flex-col gap-4">
+      {/* ---- Header ---- */}
+      <div className="dash-enter">
+        <h1 className="text-[clamp(1.8rem,4vw,2.8rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+          {greeting()}
+          {firstName ? <>, <span className="text-gradient-brand">{firstName}</span></> : ""}
+        </h1>
+        <p className="mt-2 max-w-lg text-[12px] leading-relaxed text-white/30">
+          Your acquisition workspace is ready. Find businesses, score opportunities, close deals.
+        </p>
       </div>
 
-      {/* ---------------------------------------------------- AI opportunity brief */}
+      {/* ---- Status strip ---- */}
+      <div className="dash-enter dash-enter-delay-1">
+        <StatusLine
+          items={[
+            { label: "SYSTEM ACTIVE", active: true },
+            { label: "MARKET SCAN IDLE", active: false },
+            { label: "OUTREACH READY", active: outreachActive.length > 0 },
+          ]}
+        />
+      </div>
+
+      {/* ---- Metrics ---- */}
+      <div className="dash-enter dash-enter-delay-2 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <Link href="/leads" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+          <MetricInstrument value={leads.length} label="TOTAL LEADS" />
+        </Link>
+        <Link href="/leads" className="block rounded-lg border border-primary/15 bg-primary/[0.03] transition-colors hover:border-primary/25">
+          <MetricInstrument value={highOpportunity.length} label="HIGH OPPORTUNITY" />
+        </Link>
+        <Link href="/leads" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+          <MetricInstrument value={noWebsite.length} label="NEEDS WEBSITE" />
+        </Link>
+        <Link href="/crm" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+          <MetricInstrument value={outreachActive.length} label="OUTREACH ACTIVE" />
+        </Link>
+        <Link href="/crm" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+          <MetricInstrument value={won.length} label="WON" />
+        </Link>
+      </div>
+
+      {/* ---- Opportunity brief ---- */}
       {(noWebsite.length > 0 || highOpportunity.length > 0) && (
-        <Card className="relative overflow-hidden">
-          <span
-            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl"
-            style={{ background: "hsl(var(--glow-strong) / 0.1)" }}
-            aria-hidden="true"
-          />
-          <CardHeader className="relative">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-              <CardTitle>Opportunity brief</CardTitle>
-            </div>
-            <CardDescription>
-              Drawn from the leads in your workspace right now.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="relative flex flex-col gap-2.5">
+        <InstrumentPanel className="dash-enter dash-enter-delay-3">
+          <SectionIndex number="01" title="OPPORTUNITY BRIEF" />
+          <div className="flex flex-col gap-2 p-4">
             {noWebsite.length > 0 && (
               <Link
                 href="/leads"
-                className="surface surface-interactive flex items-center gap-3 rounded-lg p-3"
+                className="flex items-center gap-3 rounded-md border border-white/[0.04] bg-white/[0.015] p-3 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.03]"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-primary/25 bg-primary/12">
-                  <Globe2 className="h-4 w-4 text-primary" aria-hidden="true" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-primary/15 bg-primary/[0.06]">
+                  <Globe2 className="h-3.5 w-3.5 text-primary" />
                 </span>
-                <span className="min-w-0 flex-1 text-[13px] leading-relaxed">
-                  <strong className="font-semibold">{noWebsite.length}</strong>{" "}
-                  {noWebsite.length === 1 ? "business has" : "businesses have"} no website detected — the
+                <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-white/50">
+                  <strong className="font-semibold text-white/70">{noWebsite.length}</strong>{" "}
+                  {noWebsite.length === 1 ? "business has" : "businesses have"} no website — the
                   strongest signal in your list.
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
+                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-white/20" />
               </Link>
             )}
             {highOpportunity.length > 0 && (
               <Link
                 href="/crm"
-                className="surface surface-interactive flex items-center gap-3 rounded-lg p-3"
+                className="flex items-center gap-3 rounded-md border border-white/[0.04] bg-white/[0.015] p-3 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.03]"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background/60">
-                  <Flame className="h-4 w-4 text-warning" aria-hidden="true" />
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-white/[0.06] bg-white/[0.03]">
+                  <Flame className="h-3.5 w-3.5 text-amber-400/70" />
                 </span>
-                <span className="min-w-0 flex-1 text-[13px] leading-relaxed">
-                  <strong className="font-semibold">{highOpportunity.length}</strong> scoring 80 or above
+                <span className="min-w-0 flex-1 text-[12px] leading-relaxed text-white/50">
+                  <strong className="font-semibold text-white/70">{highOpportunity.length}</strong> scoring 80 or above
                   {outreachActive.length === 0 ? " and none contacted yet." : "."}
                 </span>
-                <ArrowRight className="h-4 w-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
+                <ArrowRight className="h-3.5 w-3.5 shrink-0 text-white/20" />
               </Link>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </InstrumentPanel>
       )}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {/* ------------------------------------------------- opportunity overview */}
-        <Card className="xl:col-span-2">
-          <CardHeader>
-            <CardTitle>Opportunity overview</CardTitle>
-            <CardDescription>How your saved leads score.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
+      {/* ---- Charts row ---- */}
+      <div className="dash-enter dash-enter-delay-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <InstrumentPanel className="xl:col-span-2">
+          <SectionIndex number="02" title="OPPORTUNITY OVERVIEW" right={`${leads.length} LEADS`} />
+          <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-col gap-3">
               {bands.map((band) => {
                 const pct = leads.length ? Math.round((band.count / leads.length) * 100) : 0;
                 return (
                   <div key={band.label} className="flex items-center gap-3">
-                    <span className="w-16 shrink-0 text-xs font-medium">{band.label}</span>
-                    <span className="w-12 shrink-0 text-2xs text-subtle-foreground">{band.range}</span>
-                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <span className="w-16 shrink-0 text-[11px] font-medium text-white/50">{band.label}</span>
+                    <span className="w-12 shrink-0 text-[10px] text-white/20">{band.range}</span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
                       <span
-                        className={`block h-full rounded-full ${band.tone} transition-[width] duration-700 ease-out`}
-                        style={{ width: `${pct}%` }}
+                        className="block h-full rounded-full transition-[width] duration-700 ease-out"
+                        style={{ width: `${pct}%`, background: band.color }}
                       />
                     </span>
-                    <span className="numeric w-16 shrink-0 text-right text-xs">
-                      {band.count}
-                      <span className="ml-1 text-subtle-foreground">{pct}%</span>
+                    <span className="w-16 shrink-0 text-right text-[11px] font-variant-numeric:tabular-nums text-white/40">
+                      {band.count} <span className="text-white/15">{pct}%</span>
                     </span>
                   </div>
                 );
               })}
             </div>
             {series?.acquisition && series.acquisition.length > 0 && (
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-white/[0.04] pt-4">
                 <AcquisitionChart data={series.acquisition} />
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </InstrumentPanel>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Pipeline</CardTitle>
-            <CardDescription>Where your leads currently sit.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <InstrumentPanel>
+          <SectionIndex number="03" title="PIPELINE" />
+          <div className="p-4">
             {series?.funnel && series.funnel.length > 0 ? (
               <PipelineFunnelChart data={series.funnel} />
             ) : (
-              <p className="py-8 text-center text-xs text-muted-foreground">
+              <p className="py-8 text-center text-[11px] text-white/20">
                 Pipeline data appears once leads start moving between stages.
               </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </InstrumentPanel>
       </div>
 
-      {/* --------------------------------------------------- recent opportunities */}
-      <div>
-        <SectionHeading
-          title="Top opportunities"
-          description="Your highest-scoring leads right now."
-          actions={
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/leads">
-                View all
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          }
-        />
-        <Card className="overflow-hidden">
+      {/* ---- Top opportunities table ---- */}
+      <div className="dash-enter dash-enter-delay-5">
+        <InstrumentPanel>
+          <SectionIndex number="04" title="TOP OPPORTUNITIES" right={`${topOpportunities.length} SHOWN`} />
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="data-table">
               <thead>
-                <tr className="border-b border-border text-2xs text-subtle-foreground">
-                  <th scope="col" className="px-4 py-2.5 font-medium">Business</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Location</th>
-                  <th scope="col" className="hidden px-4 py-2.5 font-medium md:table-cell">Category</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Website</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Opportunity</th>
-                  <th scope="col" className="hidden px-4 py-2.5 font-medium sm:table-cell">Status</th>
+                <tr>
+                  <th scope="col">Business</th>
+                  <th scope="col">Location</th>
+                  <th scope="col" className="hidden md:table-cell">Category</th>
+                  <th scope="col">Website</th>
+                  <th scope="col">Score</th>
+                  <th scope="col" className="hidden sm:table-cell">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {topOpportunities.map((lead) => (
-                  <tr key={lead.id} className="row-hover border-b border-border/60 last:border-0">
-                    <td className="px-4 py-3">
+                  <tr key={lead.id}>
+                    <td>
                       <Link
                         href={`/leads/${lead.id}`}
-                        className="font-medium transition-colors hover:text-primary"
+                        className="font-medium text-white/70 transition-colors hover:text-primary"
                       >
                         {lead.company}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                    <td className="text-white/35">
                       {[lead.city, lead.country].filter(Boolean).join(", ")}
                     </td>
-                    <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">
-                      {lead.niche}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="hidden text-white/35 md:table-cell">{lead.niche}</td>
+                    <td>
                       <WebsiteStatusBadge status={lead.websiteStatus} />
                     </td>
-                    <td className="px-4 py-3">
-                      <ScoreRing score={lead.score.score} size={34} />
+                    <td>
+                      <ScoreRing score={lead.score.score} size={30} />
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
+                    <td className="hidden sm:table-cell">
                       <LeadStatusBadge status={lead.status} />
                     </td>
                   </tr>
@@ -343,7 +297,7 @@ export default function OverviewPage() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </InstrumentPanel>
       </div>
     </div>
   );

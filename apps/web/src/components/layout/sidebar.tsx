@@ -22,26 +22,25 @@ const PLAN_LIMITS: Record<string, number> = {
 const COLLAPSE_KEY = "leadforge_sidebar_collapsed";
 
 /**
- * The command centre: always present, never competing with the work.
- *
- * It is a shade darker than the page so the content area reads as the lit
- * surface. The only accent in here is the current section, which is what lets
- * someone locate themselves in a glance without reading any labels.
+ * Instrument rail — narrow sidebar with icon-only navigation.
+ * Expanded mode available on mobile drawer and when user toggles.
  */
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function Sidebar({
+  onNavigate,
+  expanded: forceExpanded,
+}: {
+  onNavigate?: () => void;
+  expanded?: boolean;
+}) {
   const pathname = usePathname();
   const { workspace, user } = useAuth();
   const [usage, setUsage] = useState<ApiUsage | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Restored after mount rather than during render: reading localStorage while
-  // rendering would produce a server/client mismatch.
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
-    } catch {
-      /* private mode and blocked storage are both fine here */
-    }
+      setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) !== "0");
+    } catch {}
   }, []);
 
   function toggleCollapsed() {
@@ -49,17 +48,11 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       const next = !current;
       try {
         window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
-      } catch {
-        /* the preference simply won't persist */
-      }
+      } catch {}
       return next;
     });
   }
 
-  // Refetched on navigation as well as when the session reloads: unlocking a
-  // lead spends allowance, and a meter that only updates on a full page load
-  // is a meter nobody trusts. `workspace` is a new object after every session
-  // refresh, so a plan comped by an admin pulls the new limit in here too.
   useEffect(() => {
     if (!workspace) return;
     api
@@ -68,44 +61,99 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       .catch(() => setUsage(null));
   }, [workspace, pathname]);
 
-  // The metered unit is leads unlocked, not searches run. The limit comes from
-  // the API rather than the local table, so the two cannot disagree about a
-  // plan - the local map is only a fallback while usage is still loading.
   const limit = usage?.lead_reveals_limit ?? PLAN_LIMITS[workspace?.plan ?? "FREE"] ?? 50;
   const used = usage?.lead_reveals ?? 0;
-  // Unlocks bought outright. Shown beside the bar rather than folded into it,
-  // because they sit behind the weekly allowance rather than extending it: a
-  // full bar with credits left still means "this week's included leads are
-  // gone", which is a different thing from "you cannot open another lead".
   const credits = usage?.credit_balance ?? 0;
-  // Usage is refetched independently of the session, so its plan is the
-  // fresher of the two. The cached workspace is only a fallback for the
-  // moment before usage arrives.
   const plan = user?.is_superuser ? "Administrator" : (usage?.plan ?? workspace?.plan ?? "FREE");
   const pct = Math.min(100, Math.round((used / Math.max(1, limit)) * 100));
 
-  return (
-    <aside
-      className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border bg-[hsl(var(--background))] transition-[width] duration-200 ease-out",
-        collapsed ? "w-[68px]" : "w-[248px]"
-      )}
-    >
-      <div className="flex h-14 items-center gap-2.5 px-4">
-        <Link href="/dashboard" onClick={onNavigate} className="group flex items-center gap-2.5">
-          <span className="transition-transform duration-500 group-hover:rotate-[10deg]">
-            <LogoMark size={24} />
-          </span>
-          {!collapsed && (
-            <span className="text-[15px] font-bold tracking-tight">LeadForge</span>
-          )}
+  const isExpanded = forceExpanded || !collapsed;
+  const allGroups = [...NAV_GROUPS, ...(user?.is_superuser ? [ADMIN_NAV_GROUP] : [])];
+  const allItems = allGroups.flatMap((g) => g.items);
+
+  // Collapsed: icon rail
+  if (!isExpanded) {
+    return (
+      <div className="instrument-rail">
+        {/* Logo */}
+        <Link href="/dashboard" onClick={onNavigate} className="mb-3 flex items-center justify-center">
+          <LogoMark size={22} />
         </Link>
+
+        {/* Nav items */}
+        {allItems.map((item) => {
+          const active = isActivePath(pathname ?? "", item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={cn("instrument-rail-item", active && "active")}
+              title={item.label}
+            >
+              <Icon className="h-[18px] w-[18px]" />
+              <span className="instrument-rail-tooltip">{item.label}</span>
+            </Link>
+          );
+        })}
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Usage pip */}
+        <Link
+          href="/settings?tab=billing"
+          onClick={onNavigate}
+          className="instrument-rail-item"
+          title={`${plan} — ${used}/${limit} leads`}
+        >
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{
+              background: pct > 80 ? "hsl(28 85% 55%)" : "hsl(82 100% 61%)",
+              boxShadow: `0 0 6px ${pct > 80 ? "hsl(28 85% 55% / 0.4)" : "hsl(82 100% 61% / 0.3)"}`,
+            }}
+          />
+        </Link>
+
+        {/* Collapse toggle */}
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="instrument-rail-item"
+          title="Expand sidebar"
+        >
+          <PanelLeftOpen className="h-[16px] w-[16px]" />
+        </button>
+      </div>
+    );
+  }
+
+  // Expanded: thin sidebar
+  return (
+    <div className="sidebar-expanded">
+      {/* Logo */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2">
+          <LogoMark size={20} />
+          <span className="text-[12px] font-bold tracking-tight text-white/60">LeadForge</span>
+        </Link>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="rounded p-1 text-white/20 hover:text-white/50"
+          title="Collapse sidebar"
+        >
+          <PanelLeftClose className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pb-3 scrollbar-none" aria-label="Main">
-        {[...NAV_GROUPS, ...(user?.is_superuser ? [ADMIN_NAV_GROUP] : [])].map((group) => (
-          <div key={group.label} className="mb-5">
-            {!collapsed && <p className="label-caps mb-1.5 px-2.5">{group.label}</p>}
+      {/* Nav groups */}
+      <nav className="flex-1 overflow-y-auto px-2 pb-3 scrollbar-none" aria-label="Main">
+        {allGroups.map((group) => (
+          <div key={group.label} className="mb-3">
+            <div className="sidebar-group-label">{group.label}</div>
             <ul className="flex flex-col gap-0.5">
               {group.items.map((item) => {
                 const active = isActivePath(pathname ?? "", item.href);
@@ -115,32 +163,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     <Link
                       href={item.href}
                       onClick={onNavigate}
-                      aria-current={active ? "page" : undefined}
-                      title={collapsed ? item.label : undefined}
-                      className={cn(
-                        "group/nav relative flex items-center gap-2.5 rounded-md py-2 text-[13px] font-medium transition-colors duration-150",
-                        collapsed ? "justify-center px-0" : "px-2.5",
-                        active
-                          ? "bg-primary/10 text-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                      )}
+                      className={cn("sidebar-item", active && "active")}
                     >
-                      {/* A short rail rather than a filled block: enough to
-                          locate yourself, quiet enough to ignore. */}
-                      {active && (
-                        <span
-                          className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-primary"
-                          style={{ boxShadow: "0 0 10px hsl(var(--glow-strong) / 0.9)" }}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <Icon
-                        className={cn(
-                          "h-[17px] w-[17px] shrink-0 transition-colors",
-                          active ? "text-primary" : "text-subtle-foreground group-hover/nav:text-foreground"
-                        )}
-                      />
-                      {!collapsed && <span className="truncate">{item.label}</span>}
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
                     </Link>
                   </li>
                 );
@@ -150,71 +176,37 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      {!collapsed && (
-        <div className="px-3 pb-2">
-          <Link
-            href="/settings?tab=billing"
-            onClick={onNavigate}
-            aria-label={
-              `Workspace usage: ${used} of ${limit} leads unlocked this week` +
-              (credits > 0 ? `, plus ${credits} bought` : "") +
-              ". Open billing."
-            }
-            className="surface surface-interactive block rounded-lg p-3"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-xs font-medium">{workspace?.name ?? "Workspace"}</p>
-              <span className="shrink-0 rounded-sm border border-primary/25 bg-primary/12 px-1.5 py-0.5 text-2xs font-semibold text-primary">
-                {plan}
+      {/* Usage */}
+      <div className="px-3 pb-2">
+        <Link
+          href="/settings?tab=billing"
+          onClick={onNavigate}
+          className="block rounded-md border border-white/[0.05] bg-white/[0.02] p-2.5 transition-colors hover:border-white/[0.08]"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[10px] font-medium text-white/50">
+              {workspace?.name ?? "Workspace"}
+            </span>
+            <span className="shrink-0 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[8px] font-bold text-primary">
+              {plan}
+            </span>
+          </div>
+          <div className="mt-2">
+            <div className="flex items-center justify-between text-[9px] text-white/25">
+              <span>Leads</span>
+              <span className="font-variant-numeric:tabular-nums">
+                {used.toLocaleString()} / {limit.toLocaleString()}
               </span>
             </div>
-            <div className="mt-2.5 space-y-1.5">
-              <div className="flex items-center justify-between text-2xs text-muted-foreground">
-                <span>Leads unlocked</span>
-                <span className="numeric">
-                  {used.toLocaleString()} / {limit.toLocaleString()}
-                </span>
-              </div>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
               <div
-                className="h-1 w-full overflow-hidden rounded-full bg-muted"
-                role="progressbar"
-                aria-valuenow={pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="Leads unlocked"
-              >
-                <div className="h-full rounded-full bg-primary/80" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="pt-0.5 text-2xs text-subtle-foreground">
-                {credits > 0
-                  ? `+${credits.toLocaleString()} bought - view plan and usage`
-                  : "View plan and usage"}
-              </p>
+                className="h-full rounded-full bg-primary/70 transition-[width] duration-700"
+                style={{ width: `${pct}%` }}
+              />
             </div>
-          </Link>
-        </div>
-      )}
-
-      <div className="border-t border-border p-2">
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-md py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-            collapsed ? "justify-center px-0" : "px-2.5"
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-[17px] w-[17px]" />
-          ) : (
-            <>
-              <PanelLeftClose className="h-[17px] w-[17px]" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
+          </div>
+        </Link>
       </div>
-    </aside>
+    </div>
   );
 }

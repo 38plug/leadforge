@@ -764,3 +764,421 @@ input:focus-visible,
   0% { opacity: 0; transform: translateY(10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+
+/* ======================================================================
+   Dashboard — App Frame + Instrument System
+   ====================================================================== */
+
+/* Outer frame: thin inset from viewport */
+.app-frame {
+  margin: 12px;
+  border: 1px solid hsl(0 0% 100% / 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  min-height: calc(100vh - 24px);
+}
+@media (min-width: 1280px) {
+  .app-frame { margin: 16px; min-height: calc(100vh - 32px); }
+}
+@media (min-width: 1536px) {
+  .app-frame { margin: 20px; min-height: calc(100vh - 40px); }
+}
+
+/* Command bar: ultra-thin, editorial */
+.command-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.06);
+  background: hsl(0 0% 2.5% / 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.35);
+  flex-shrink: 0;
+}
+.command-bar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: hsl(0 0% 100% / 0.5);
+}
+.command-bar-logo span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: hsl(0 0% 100% / 0.6);
+}
+.command-bar-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.command-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Instrument rail (sidebar) */
+.instrument-rail {
+  width: 56px;
+  border-right: 1px solid hsl(0 0% 100% / 0.06);
+  background: hsl(0 0% 2%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.instrument-rail::-webkit-scrollbar { display: none; }
+.instrument-rail-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  color: hsl(0 0% 100% / 0.25);
+  transition: all 0.15s ease;
+  position: relative;
+}
+.instrument-rail-item:hover {
+  color: hsl(0 0% 100% / 0.55);
+  background: hsl(0 0% 100% / 0.04);
+}
+.instrument-rail-item.active {
+  color: hsl(82 100% 61%);
+  background: hsl(82 100% 61% / 0.08);
+}
+.instrument-rail-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: hsl(82 100% 61%);
+  box-shadow: 0 0 8px hsl(82 100% 61% / 0.5);
+}
+.instrument-rail-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: hsl(0 0% 8%);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+  font-size: 11px;
+  font-weight: 500;
+  color: hsl(0 0% 100% / 0.7);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 50;
+}
+.instrument-rail-item:hover .instrument-rail-tooltip {
+  opacity: 1;
+}
+
+/* Expanded sidebar rail (when needed) */
+.sidebar-expanded {
+  width: 200px;
+  border-right: 1px solid hsl(0 0% 100% / 0.06);
+  background: hsl(0 0% 2%);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.sidebar-expanded::-webkit-scrollbar { display: none; }
+.sidebar-expanded .sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin: 1px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(0 0% 100% / 0.35);
+  transition: all 0.15s ease;
+  text-decoration: none;
+  position: relative;
+}
+.sidebar-expanded .sidebar-item:hover {
+  color: hsl(0 0% 100% / 0.65);
+  background: hsl(0 0% 100% / 0.04);
+}
+.sidebar-expanded .sidebar-item.active {
+  color: hsl(0 0% 96%);
+  background: hsl(82 100% 61% / 0.06);
+}
+.sidebar-expanded .sidebar-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: hsl(82 100% 61%);
+  box-shadow: 0 0 8px hsl(82 100% 61% / 0.5);
+}
+.sidebar-group-label {
+  padding: 16px 16px 4px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.15);
+}
+
+/* Instrument panel */
+.instrument-panel {
+  background: hsl(0 0% 4% / 0.6);
+  border: 1px solid hsl(0 0% 100% / 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.instrument-panel:hover {
+  border-color: hsl(0 0% 100% / 0.1);
+}
+.instrument-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.04);
+}
+.instrument-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.3);
+}
+.instrument-right-label {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(82 100% 61% / 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Metric instrument */
+.metric-instrument {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.04);
+}
+.metric-instrument:last-child { border-bottom: none; }
+.metric-value {
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: hsl(0 0% 96%);
+}
+.metric-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.3);
+}
+.metric-annotation {
+  font-size: 10px;
+  color: hsl(0 0% 100% / 0.2);
+  margin-top: 2px;
+}
+
+/* Status line */
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.2);
+  border-bottom: 1px solid hsl(0 0% 100% / 0.04);
+}
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: hsl(0 0% 100% / 0.15);
+}
+.status-dot--active {
+  background: hsl(82 100% 61%);
+  box-shadow: 0 0 8px hsl(82 100% 61% / 0.4);
+  animation: status-pulse 3s ease-in-out infinite;
+}
+
+/* Section index */
+.section-index {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.04);
+}
+.section-index-number {
+  font-size: 9px;
+  font-weight: 700;
+  color: hsl(82 100% 61% / 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.section-index-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.4);
+}
+.section-index-right {
+  margin-left: auto;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(82 100% 61% / 0.4);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ======================================================================
+   Dashboard Entrance Animation
+   ====================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  .dash-enter {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: dash-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .dash-enter-delay-1 { animation-delay: 0.08s; }
+  .dash-enter-delay-2 { animation-delay: 0.16s; }
+  .dash-enter-delay-3 { animation-delay: 0.24s; }
+  .dash-enter-delay-4 { animation-delay: 0.32s; }
+  .dash-enter-delay-5 { animation-delay: 0.4s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash-enter { opacity: 1; transform: none; animation: none; }
+}
+@keyframes dash-enter {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ======================================================================
+   Table Density — dashboard tables stay compact
+   ====================================================================== */
+.data-table {
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+}
+.data-table th {
+  padding: 8px 16px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.25);
+  border-bottom: 1px solid hsl(0 0% 100% / 0.06);
+}
+.data-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.03);
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td {
+  background: hsl(0 0% 100% / 0.02);
+}
+
+/* ======================================================================
+   Pipeline Board — CRM columns
+   ====================================================================== */
+.pipeline-column {
+  min-width: 220px;
+  max-width: 280px;
+  flex-shrink: 0;
+  background: hsl(0 0% 3% / 0.5);
+  border: 1px solid hsl(0 0% 100% / 0.05);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+}
+.pipeline-column-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid hsl(0 0% 100% / 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pipeline-column-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.4);
+}
+.pipeline-column-count {
+  font-size: 9px;
+  font-weight: 700;
+  color: hsl(82 100% 61% / 0.5);
+  font-variant-numeric: tabular-nums;
+}
+.pipeline-card {
+  margin: 4px 8px;
+  padding: 10px 12px;
+  background: hsl(0 0% 5% / 0.6);
+  border: 1px solid hsl(0 0% 100% / 0.05);
+  border-radius: 6px;
+  cursor: grab;
+  transition: all 0.15s ease;
+}
+.pipeline-card:hover {
+  border-color: hsl(0 0% 100% / 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px -4px hsl(0 0% 0% / 0.5);
+}
+.pipeline-card:active {
+  cursor: grabbing;
+  border-color: hsl(82 100% 61% / 0.2);
+}
+.pipeline-card.dragging {
+  opacity: 0.5;
+  border-color: hsl(82 100% 61% / 0.3);
+}
+.pipeline-card-over {
+  border-color: hsl(82 100% 61% / 0.4) !important;
+  background: hsl(82 100% 61% / 0.04) !important;
+}

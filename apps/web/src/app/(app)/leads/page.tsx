@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/page-header";
+import { InstrumentPanel, SectionIndex } from "@/components/layout/app-instruments";
 import { LeadStatusBadge, ScorePill, WebsiteStatusBadge } from "@/components/leads/badges";
 import { ErrorState, EmptyState, SkeletonRows } from "@/components/ui/state";
 import { formatNumber } from "@/lib/utils";
@@ -135,31 +136,42 @@ export default function LeadsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6">
-        <PageHeader title="Leads" description="Every business you have saved." />
-        <Card className="p-4">
-          <SkeletonRows rows={8} />
-        </Card>
+      <div className="flex flex-col gap-4">
+        <div className="dash-enter">
+          <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+            LEADS
+          </h1>
+          <p className="mt-2 text-[12px] text-white/30">Every business you have saved.</p>
+        </div>
+        <InstrumentPanel className="p-4"><SkeletonRows rows={8} /></InstrumentPanel>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col gap-6">
-        <PageHeader title="Leads" description="Every business you have saved." />
-        <Card>
+      <div className="flex flex-col gap-4">
+        <div className="dash-enter">
+          <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+            LEADS
+          </h1>
+        </div>
+        <InstrumentPanel>
           <ErrorState title="Your leads could not be loaded" message={error} onRetry={refetch} />
-        </Card>
+        </InstrumentPanel>
       </div>
     );
   }
 
   if (allLeads.length === 0) {
     return (
-      <div className="flex flex-col gap-6">
-        <PageHeader title="Leads" description="Every business you have saved." />
-        <Card>
+      <div className="flex flex-col gap-4">
+        <div className="dash-enter">
+          <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+            LEADS
+          </h1>
+        </div>
+        <InstrumentPanel>
           <EmptyState
             icon={Radar}
             title="No leads yet"
@@ -170,36 +182,40 @@ export default function LeadsPage() {
               </Button>
             }
           />
-        </Card>
+        </InstrumentPanel>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Leads"
-        description={`${filtered.length} ${filtered.length === 1 ? "lead" : "leads"} in your workspace.`}
-        actions={
-          <>
-            <Button asChild variant="secondary">
-              <Link href="/lead-finder">
-                <Radar className="h-4 w-4" />
-                Discover more
-              </Link>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() =>
-                exportToCsv(selected.size ? allLeads.filter((l) => selected.has(l.id)) : filtered)
-              }
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </Button>
-          </>
-        }
-      />
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="dash-enter">
+        <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+          LEADS
+        </h1>
+        <p className="mt-2 text-[12px] text-white/30">
+          {filtered.length} {filtered.length === 1 ? "lead" : "leads"} in your workspace.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild variant="secondary" className="rounded-[6px] border-white/[0.08] bg-white/[0.03] text-[11px] text-white/50 hover:bg-white/[0.06]">
+            <Link href="/lead-finder">
+              <Radar className="h-3.5 w-3.5" />
+              Discover more
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              exportToCsv(selected.size ? allLeads.filter((l) => selected.has(l.id)) : filtered)
+            }
+            className="rounded-[6px] border-white/[0.08] bg-white/[0.03] text-[11px] text-white/50 hover:bg-white/[0.06]"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </Button>
+        </div>
+      </div>
 
       {/* Bulk bar appears only with a selection, so the toolbar is not
           permanently occupied by actions that cannot be used. */}
@@ -275,12 +291,9 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <Card>
-        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b border-border">
-          <div className="min-w-0">
-            <CardTitle>All leads</CardTitle>
-            <CardDescription>Saved from every search you have run.</CardDescription>
-          </div>
+      <InstrumentPanel>
+        <SectionIndex number="01" title="ALL LEADS" right={`${filtered.length} SHOWN`} />
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.04] px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <Select
               aria-label="Filter by country"
@@ -304,12 +317,11 @@ export default function LeadsPage() {
               />
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
               <thead>
-                <tr className="border-b border-border">
+                <tr>
                   <th scope="col" className="w-10 px-4 py-2.5">
                     <input
                       type="checkbox"
@@ -334,7 +346,7 @@ export default function LeadsPage() {
               </thead>
               <tbody>
                 {pageItems.map((lead) => (
-                  <tr key={lead.id} className="row-hover border-b border-border/60 last:border-0">
+                  <tr key={lead.id}>
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
@@ -385,15 +397,14 @@ export default function LeadsPage() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">
-            <span className="numeric">Page {page} of {totalPages}</span>
+          <div className="flex items-center justify-between border-t border-white/[0.04] px-4 py-3 text-[11px] text-white/30">
+            <span className="font-variant-numeric:tabular-nums">Page {page} of {totalPages}</span>
             <div className="flex gap-2">
               <Button size="sm" variant="secondary" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
               <Button size="sm" variant="secondary" disabled={page === totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+           </div>
+        </InstrumentPanel>
     </div>
   );
 }

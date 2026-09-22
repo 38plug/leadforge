@@ -75,18 +75,24 @@ export default function PipelinePage() {
   }
 
   const header = (
-    <PageHeader
-      title="Pipeline"
-      description="Drag a lead between stages to move the deal forward."
-      actions={
-        <Button asChild variant="secondary">
+    <div className="dash-enter">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-[0.92] tracking-[-0.03em] text-white">
+            PIPELINE
+          </h1>
+          <p className="mt-2 text-[12px] text-white/30">
+            Drag a lead between stages to move the deal forward.
+          </p>
+        </div>
+        <Button asChild variant="secondary" className="rounded-[6px] border-white/[0.08] bg-white/[0.03] text-[11px] text-white/50 hover:bg-white/[0.06]">
           <Link href="/lead-finder">
-            <Radar className="h-4 w-4" />
+            <Radar className="h-3.5 w-3.5" />
             Discover more
           </Link>
         </Button>
-      }
-    />
+      </div>
+    </div>
   );
 
   if (loading) {
@@ -156,11 +162,11 @@ export default function PipelinePage() {
               onDrop={() => onDrop(stage.key)}
               aria-label={`${stage.label}, ${stageLeads.length} leads`}
               className={cn(
-                "flex w-[272px] shrink-0 flex-col rounded-xl border bg-surface transition-colors",
-                isOver ? "border-primary/50 bg-primary/[0.06]" : "border-border"
+                "pipeline-column",
+                isOver && "pipeline-card-over"
               )}
             >
-              <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
+              <header className="pipeline-column-header">
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
@@ -171,8 +177,8 @@ export default function PipelinePage() {
                     )}
                     aria-hidden="true"
                   />
-                  <h3 className="text-xs font-semibold">{stage.label}</h3>
-                  <span className="numeric rounded-sm bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
+                  <h3 className="pipeline-column-title">{stage.label}</h3>
+                  <span className="pipeline-column-count">
                     {stageLeads.length}
                   </span>
                 </div>
@@ -194,8 +200,8 @@ export default function PipelinePage() {
                       setOverStage(null);
                     }}
                     className={cn(
-                      "surface surface-interactive cursor-grab rounded-lg p-2.5 active:cursor-grabbing",
-                      dragId === lead.id && "opacity-50"
+                      "pipeline-card",
+                      dragId === lead.id && "dragging"
                     )}
                   >
                     <Link href={`/leads/${lead.id}`} className="flex flex-col gap-2">

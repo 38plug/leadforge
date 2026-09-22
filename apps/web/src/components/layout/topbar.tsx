@@ -12,9 +12,8 @@ import type { ApiNotification } from "@/types/api";
 import { titleForPath } from "@/lib/navigation";
 
 /**
- * Thin by design. The bar's job is to say where you are and get out of the
- * way; the search field is a doorway to the command palette rather than a
- * second search implementation, so there is one way to find things.
+ * Ultra-thin command bar — says where you are, provides search, gets out.
+ * Replaces the thick topbar with an editorial-grade header.
  */
 export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
   const { user, workspace, logout } = useAuth();
@@ -54,7 +53,6 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
     router.push("/login");
   }
 
-  /** The palette listens for Cmd/Ctrl+K globally; clicking dispatches the same. */
   function openCommandPalette() {
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "k", metaKey: true, ctrlKey: true, bubbles: true })
@@ -65,92 +63,117 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
   const title = titleForPath(pathname ?? "");
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-xl">
+    <header className="command-bar">
+      {/* Mobile menu button */}
       <button
         type="button"
         onClick={onOpenNav}
         aria-label="Open navigation"
-        className="-ml-1 rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
+        className="rounded p-1 text-white/30 hover:text-white/60 md:hidden"
       >
-        <Menu className="h-4.5 w-4.5" />
+        <Menu className="h-4 w-4" />
       </button>
 
-      <h1 className="truncate text-[15px] font-semibold tracking-tight">{title}</h1>
+      {/* Left: Logo */}
+      <div className="command-bar-logo">
+        <span className="hidden md:inline">LEADFORGE</span>
+      </div>
 
-      <button
-        type="button"
-        onClick={openCommandPalette}
-        className={cn(
-          "ml-auto hidden h-9 items-center gap-2.5 rounded-md border border-border bg-background/60 px-3 text-left text-sm text-subtle-foreground transition-colors sm:flex",
-          "w-full max-w-[280px] hover:border-border-strong hover:text-muted-foreground"
-        )}
-      >
-        <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="flex-1 truncate">Search...</span>
-        <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-sans text-2xs text-subtle-foreground">
-          ⌘K
-        </kbd>
-      </button>
+      {/* Center: Page title + system status */}
+      <div className="command-bar-center">
+        <span className="text-white/50">{title}</span>
+        <span className="hidden items-center gap-1.5 sm:flex">
+          <span
+            className="h-1 w-1 rounded-full"
+            style={{
+              background: "hsl(82 100% 61%)",
+              boxShadow: "0 0 4px hsl(82 100% 61% / 0.4)",
+            }}
+          />
+          <span className="text-white/20">ENGINE ACTIVE</span>
+        </span>
+      </div>
 
-      <div className="ml-auto flex items-center gap-1 sm:ml-0">
+      {/* Right: Search + Notifications + Account */}
+      <div className="command-bar-right">
+        {/* Search trigger */}
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          className="hidden items-center gap-1.5 rounded border border-white/[0.06] bg-white/[0.02] px-2 py-1 text-white/25 transition-colors hover:border-white/[0.1] hover:text-white/40 sm:flex"
+        >
+          <Search className="h-3 w-3" />
+          <span className="text-[9px]">SEARCH</span>
+          <kbd className="ml-1 rounded border border-white/[0.06] bg-white/[0.03] px-1 py-0.5 text-[8px] text-white/20">
+            ⌘K
+          </kbd>
+        </button>
+
         <Button
           variant="ghost"
           size="icon"
           onClick={openCommandPalette}
           aria-label="Search"
-          className="sm:hidden"
+          className="h-7 w-7 text-white/30 hover:text-white/60 sm:hidden"
         >
-          <Search className="h-4 w-4" />
+          <Search className="h-3.5 w-3.5" />
         </Button>
 
-        <Button variant="ghost" size="icon" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`} className="relative">
-          <Bell className="h-4 w-4" />
+        {/* Notifications */}
+        <button
+          className="relative rounded p-1 text-white/30 hover:text-white/60"
+          aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+        >
+          <Bell className="h-3.5 w-3.5" />
           {unreadCount > 0 && (
             <span
-              className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-primary"
-              style={{ boxShadow: "0 0 8px hsl(var(--glow-strong))" }}
+              className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
+              style={{
+                background: "hsl(82 100% 61%)",
+                boxShadow: "0 0 4px hsl(82 100% 61% / 0.5)",
+              }}
             />
           )}
-        </Button>
+        </button>
 
+        {/* Account menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((open) => !open)}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
-            className="flex items-center gap-2 rounded-md py-1.5 pl-1.5 pr-2 text-sm transition-colors hover:bg-accent"
+            className="flex items-center gap-1.5 rounded py-1 pl-1 pr-1.5 transition-colors hover:bg-white/[0.04]"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/25 bg-primary/12 text-2xs font-semibold text-primary">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-[9px] font-bold text-primary"
+            >
               {initials(displayName)}
             </span>
-            <span className="hidden max-w-[120px] truncate text-[13px] font-medium lg:inline">
-              {displayName}
-            </span>
-            <ChevronDown className="hidden h-3.5 w-3.5 text-subtle-foreground lg:inline" />
+            <ChevronDown className="h-3 w-3 text-white/20" />
           </button>
 
           {menuOpen && (
             <div
               role="menu"
-              className="animate-scale-in absolute right-0 top-full z-50 mt-1.5 w-60 origin-top-right overflow-hidden rounded-lg surface-elevated p-1"
+              className="absolute right-0 top-full z-50 mt-1.5 w-52 overflow-hidden rounded-lg border border-white/[0.08] bg-[#0a0a0a]/95 p-1 shadow-[0_16px_48px_-12px_rgba(0,0,0,0.8)] backdrop-blur-xl"
             >
               <div className="px-2.5 py-2">
-                <p className="truncate text-[13px] font-medium">{displayName}</p>
-                <p className="truncate text-2xs text-muted-foreground">{workspace?.name}</p>
+                <p className="truncate text-[12px] font-medium text-white/70">{displayName}</p>
+                <p className="truncate text-[10px] text-white/30">{workspace?.name}</p>
               </div>
-              <div className="my-1 h-px bg-border" />
+              <div className="my-1 h-px bg-white/[0.06]" />
               <Link
                 href="/settings"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/60"
               >
                 <SettingsIcon className="h-3.5 w-3.5" /> Settings
               </Link>
               <button
                 role="menuitem"
                 onClick={handleLogout}
-                className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] text-destructive transition-colors hover:bg-destructive/10"
+                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] text-red-400/60 transition-colors hover:bg-red-500/[0.06] hover:text-red-400/80"
               >
                 <LogOut className="h-3.5 w-3.5" /> Log out
               </button>
