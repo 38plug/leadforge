@@ -40,10 +40,10 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setMenuOpen(false);
     }
-    document.addEventListener("click", onClickOutside);
+    document.addEventListener("mousedown", onClickOutside);
     document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("click", onClickOutside);
+      document.removeEventListener("mousedown", onClickOutside);
       document.removeEventListener("keydown", onKeyDown);
     };
   }, []);
@@ -172,7 +172,11 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
               </Link>
               <button
                 role="menuitem"
-                onClick={handleLogout}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  setMenuOpen(false);
+                  handleLogout();
+                }}
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12px] text-red-400/60 transition-colors hover:bg-red-500/[0.06] hover:text-red-400/80"
               >
                 <LogOut className="h-3.5 w-3.5" /> Log out
