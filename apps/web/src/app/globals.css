@@ -1182,3 +1182,69 @@ input:focus-visible,
   border-color: hsl(82 100% 61% / 0.4) !important;
   background: hsl(82 100% 61% / 0.04) !important;
 }
+
+/* ======================================================================
+   Flyout Panel — slides out from instrument rail on hover
+   ====================================================================== */
+.instrument-flyout {
+  position: absolute;
+  left: 56px;
+  top: 0;
+  width: 200px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: hsl(0 0% 5% / 0.97);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  z-index: 100;
+  animation: flyout-enter 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  padding: 4px;
+}
+.instrument-flyout::-webkit-scrollbar { display: none; }
+.instrument-flyout-header {
+  padding: 6px 10px 4px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: hsl(0 0% 100% / 0.2);
+}
+.instrument-flyout-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: hsl(0 0% 100% / 0.4);
+  text-decoration: none;
+  transition: all 0.12s ease;
+}
+.instrument-flyout-item:hover {
+  color: hsl(0 0% 100% / 0.7);
+  background: hsl(0 0% 100% / 0.04);
+}
+.instrument-flyout-item.active {
+  color: hsl(0 0% 96%);
+  background: hsl(82 100% 61% / 0.08);
+}
+.instrument-flyout-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 1px;
+  background: hsl(82 100% 61%);
+  box-shadow: 0 0 8px hsl(82 100% 61% / 0.5);
+}
+@keyframes flyout-enter {
+  0% { opacity: 0; transform: translateX(-4px); }
+  100% { opacity: 1; transform: translateX(0); }
+}

@@ -23,7 +23,7 @@ const COLLAPSE_KEY = "leadforge_sidebar_collapsed";
 
 /**
  * Instrument rail — narrow sidebar with icon-only navigation.
- * Expanded mode available on mobile drawer and when user toggles.
+ * On hover, a flyout panel slides out showing labels for each item.
  */
 export function Sidebar({
   onNavigate,
@@ -36,6 +36,8 @@ export function Sidebar({
   const { workspace, user } = useAuth();
   const [usage, setUsage] = useState<ApiUsage | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const [flyoutY, setFlyoutY] = useState(0);
 
   useEffect(() => {
     try {
@@ -71,61 +73,107 @@ export function Sidebar({
   const allGroups = [...NAV_GROUPS, ...(user?.is_superuser ? [ADMIN_NAV_GROUP] : [])];
   const allItems = allGroups.flatMap((g) => g.items);
 
-  // Collapsed: icon rail
+  // Collapsed: icon rail with flyout panel
   if (!isExpanded) {
     return (
-      <div className="instrument-rail">
-        {/* Logo */}
-        <Link href="/dashboard" onClick={onNavigate} className="mb-3 flex items-center justify-center">
-          <LogoMark size={22} />
-        </Link>
+      <div className="relative flex h-full">
+        {/* The rail */}
+        <nav className="instrument-rail" aria-label="Main">
+          {/* Logo */}
+          <Link href="/dashboard" onClick={onNavigate} className="mb-3 flex items-center justify-center">
+            <LogoMark size={22} />
+          </Link>
 
-        {/* Nav items */}
-        {allItems.map((item) => {
-          const active = isActivePath(pathname ?? "", item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn("instrument-rail-item", active && "active")}
-              title={item.label}
-            >
-              <Icon className="h-[18px] w-[18px]" />
-              <span className="instrument-rail-tooltip">{item.label}</span>
-            </Link>
-          );
-        })}
+          {/* Nav items */}
+          {allItems.map((item) => {
+            const active = isActivePath(pathname ?? "", item.href);
+            const Icon = item.icon;
+            const group = allGroups.find((g) => g.items.some((i) => i.href === item.href));
+            return (
+              <div
+                key={item.href}
+                className="relative"
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const railRect = e.currentTarget.closest(".instrument-rail")?.getBoundingClientRect();
+                  if (railRect) {
+                    setFlyoutY(rect.top - railRect.top);
+                  }
+                  setHoveredGroup(group?.label ?? null);
+                }}
+                onMouseLeave={() => setHoveredGroup(null)}
+              >
+                <Link
+                  href={item.href}
+                  onClick={onNavigate}
+                  className={cn("instrument-rail-item", active && "active")}
+                >
+                  <Icon className="h-[18px] w-[18px]" />
+                </Link>
+              </div>
+            );
+          })}
 
-        {/* Spacer */}
-        <div className="flex-1" />
+          {/* Spacer */}
+          <div className="flex-1" />
 
-        {/* Usage pip */}
-        <Link
-          href="/settings?tab=billing"
-          onClick={onNavigate}
-          className="instrument-rail-item"
-          title={`${plan} — ${used}/${limit} leads`}
-        >
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{
-              background: pct > 80 ? "hsl(28 85% 55%)" : "hsl(82 100% 61%)",
-              boxShadow: `0 0 6px ${pct > 80 ? "hsl(28 85% 55% / 0.4)" : "hsl(82 100% 61% / 0.3)"}`,
-            }}
-          />
-        </Link>
+          {/* Usage pip */}
+          <Link
+            href="/settings?tab=billing"
+            onClick={onNavigate}
+            className="instrument-rail-item"
+            title={`${plan} — ${used}/${limit} leads`}
+          >
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{
+                background: pct > 80 ? "hsl(28 85% 55%)" : "hsl(82 100% 61%)",
+                boxShadow: `0 0 6px ${pct > 80 ? "hsl(28 85% 55% / 0.4)" : "hsl(82 100% 61% / 0.3)"}`,
+              }}
+            />
+          </Link>
 
-        {/* Collapse toggle */}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          className="instrument-rail-item"
-          title="Expand sidebar"
-        >
-          <PanelLeftOpen className="h-[16px] w-[16px]" />
-        </button>
+          {/* Collapse toggle */}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="instrument-rail-item"
+            title="Expand sidebar"
+          >
+            <PanelLeftOpen className="h-[16px] w-[16px]" />
+          </button>
+        </nav>
+
+        {/* Flyout panel — slides out on hover */}
+        {hoveredGroup && (
+          <div
+            className="instrument-flyout"
+            style={{ top: flyoutY }}
+          >
+            <div className="instrument-flyout-header">
+              {hoveredGroup}
+            </div>
+            {allGroups
+              .filter((g) => g.label === hoveredGroup)
+              .map((group) =>
+                group.items.map((item) => {
+                  const active = isActivePath(pathname ?? "", item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={onNavigate}
+                      className={cn("instrument-flyout-item", active && "active")}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })
+              )}
+          </div>
+        )}
       </div>
     );
   }
