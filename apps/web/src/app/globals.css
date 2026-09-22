@@ -12,10 +12,10 @@
 
 :root,
 .dark {
-  --background: 0 0% 5%;
-  --surface: 0 0% 7%;
-  --surface-elevated: 0 0% 9%;
-  --card: 0 0% 7%;
+  --background: 0 0% 2%;
+  --surface: 0 0% 4%;
+  --surface-elevated: 0 0% 6%;
+  --card: 0 0% 4%;
   --card-foreground: 0 0% 96%;
   --popover: 0 0% 8%;
   --popover-foreground: 0 0% 96%;

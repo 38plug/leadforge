@@ -54,7 +54,7 @@ export default function LandingPage() {
   }, [handleMouseMove]);
 
   return (
-    <div className="page-frame grain-overlay vignette relative bg-[#0a0a0a]">
+    <div className="page-frame grain-overlay vignette relative bg-[#050505]">
       {/* Dot grid texture */}
       <div className="pointer-events-none absolute inset-0 z-0 dot-grid opacity-30" />
 
