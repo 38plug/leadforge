@@ -9,73 +9,50 @@ import {
   Target,
   KanbanSquare,
   Globe,
-  Star,
-  Check,
-  Zap,
   Shield,
-  BarChart3,
 } from "lucide-react";
 import { LandingNav } from "@/components/marketing/landing-nav";
-import { HeroMockup } from "@/components/marketing/hero-mockup";
+import { RibbonArtwork } from "@/components/marketing/ribbon-artwork";
+import { ProductPanel } from "@/components/marketing/product-panel";
 
 const FEATURES = [
   {
     icon: Search,
-    title: "Discover the right businesses",
+    title: "Discover",
     body: "Filter by country, city, and niche to surface local businesses that match your ideal client profile.",
-    wide: true,
   },
   {
     icon: Globe,
-    title: "Real website detection",
-    body: "Every lead is checked for a live, working website — no website and outdated sites are flagged automatically.",
+    title: "Detect",
+    body: "Every lead is checked for a live, working website — outdated sites are flagged automatically.",
   },
   {
     icon: Target,
-    title: "Opportunity scoring",
-    body: "A transparent 0–100 score explains exactly why a business is a good fit, backed by rating, reviews, and social presence.",
+    title: "Score",
+    body: "A transparent 0–100 score backed by rating, reviews, and social presence.",
   },
   {
     icon: Sparkles,
-    title: "AI-generated outreach",
-    body: "Turn a lead into a personalized email, call script, or Instagram DM in one click.",
+    title: "Outreach",
+    body: "Turn a lead into a personalized email, call script, or DM in one click.",
   },
   {
     icon: KanbanSquare,
-    title: "Built-in CRM pipeline",
-    body: "Move leads from New to Won across a 9-stage Kanban board with activity history and follow-up reminders.",
-    wide: true,
+    title: "Pipeline",
+    body: "Move leads from New to Won across a 9-stage Kanban board.",
   },
   {
     icon: Shield,
-    title: "Compliant campaigns",
-    body: "Suppression lists, unsubscribe handling, and sending limits are built in from day one.",
+    title: "Comply",
+    body: "Suppression lists, unsubscribe handling, and sending limits built in.",
   },
 ];
 
 const STATS = [
   { value: "2,481", label: "Businesses analyzed / workspace / month" },
-  { value: "94", label: "Avg. opportunity score of saved leads" },
-  { value: "3.2×", label: "More replies vs. generic cold outreach" },
+  { value: "94", label: "Avg. opportunity score" },
+  { value: "3.2×", label: "More replies vs. generic outreach" },
 ];
-
-function ParticlesField() {
-  return (
-    <div className="hero-particles">
-      {Array.from({ length: 24 }).map((_, i) => (
-        <div key={`p-${i}`} className="particle" />
-      ))}
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={`pl-${i}`} className="particle particle-lg" />
-      ))}
-      <div className="hero-network">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={`l-${i}`} className="line" />
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function LandingPage() {
   useEffect(() => {
@@ -90,258 +67,202 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.08, rootMargin: "0px 0px -60px 0px" }
+      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
     );
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
 
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#030303] text-white">
-      {/* ============================================================
-          ATMOSPHERE — Multi-layer aurora glows
-          ============================================================ */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* Primary lime glow — large, centered */}
-        <div
-          className="absolute left-1/2 top-[-25%] h-[900px] w-[1200px] -translate-x-1/2 rounded-full blur-[200px]"
-          style={{
-            background: "radial-gradient(circle, hsl(var(--glow-strong) / 0.35), transparent 55%)",
-            opacity: 0.6,
-          }}
-        />
-        {/* Secondary warm glow — right */}
-        <div
-          className="absolute right-[-20%] top-[5%] h-[600px] w-[600px] rounded-full blur-[180px]"
-          style={{
-            background: "radial-gradient(circle, hsl(var(--glow-soft) / 0.25), transparent 55%)",
-            opacity: 0.5,
-          }}
-        />
-        {/* Tertiary — left low */}
-        <div
-          className="absolute left-[-15%] top-[55%] h-[500px] w-[500px] rounded-full blur-[170px]"
-          style={{
-            background: "radial-gradient(circle, hsl(var(--glow-strong) / 0.2), transparent 55%)",
-            opacity: 0.4,
-          }}
-        />
-        {/* Deep accent — bottom right */}
-        <div
-          className="absolute right-[5%] top-[80%] h-[550px] w-[550px] rounded-full blur-[190px]"
-          style={{
-            background: "radial-gradient(circle, hsl(82 60% 40% / 0.3), transparent 55%)",
-            opacity: 0.35,
-          }}
-        />
-      </div>
+    <div className="page-frame relative bg-[#020202]">
+      {/* Grid texture */}
+      <div className="pointer-events-none absolute inset-0 dot-grid opacity-30" />
 
-      {/* Dot grid texture */}
-      <div className="pointer-events-none absolute inset-0 dot-grid opacity-50" />
+      {/* Abstract ribbon artwork */}
+      <RibbonArtwork />
 
-      {/* Navigation */}
-      <div className="relative px-4 pt-6 sm:px-6">
-        <LandingNav />
-      </div>
-
-      {/* ============================================================
-          HERO — Cinematic centerpiece
-          ============================================================ */}
-      <section className="relative px-4 pb-24 pt-24 sm:px-6 sm:pt-36">
-        <ParticlesField />
-
-        <div className="relative mx-auto flex max-w-6xl flex-col items-center text-center">
-          {/* Badge */}
-          <div
-            data-reveal
-            className="glass inline-flex items-center gap-2 rounded-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-primary"
-          >
-            <Zap className="h-3 w-3" />
-            AI-powered client acquisition
-          </div>
-
-          {/* Headline — KaultAI-scale */}
-          <h1
-            data-reveal
-            className="mt-10 max-w-5xl text-[clamp(3rem,7vw,5.5rem)] font-bold leading-[0.98] tracking-[-0.03em] text-balance"
-          >
-            Find businesses that{" "}
-            <span className="text-gradient-brand">need you</span>
-          </h1>
-
-          {/* Subtext */}
-          <p
-            data-reveal
-            className="mt-8 max-w-lg text-balance text-[16px] leading-relaxed text-white/40 sm:text-[17px]"
-          >
-            Discover businesses with untapped digital potential, understand their
-            opportunity, and turn them into qualified clients.
-          </p>
-
-          {/* CTAs */}
-          <div data-reveal className="mt-12 flex flex-col items-center gap-4 sm:flex-row">
-            <Link
-              href="/register"
-              className="sheen group inline-flex items-center gap-3 rounded-2xl bg-gradient-brand px-8 py-4 text-[15px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_-8px_hsl(var(--glow-strong)/0.7)]"
-            >
-              Start finding leads
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/login"
-              className="glass inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-[15px] font-semibold text-white/60 transition-all duration-300 hover:text-white hover:shadow-[0_0_30px_-10px_rgba(255,255,255,0.1)]"
-            >
-              Explore platform
-            </Link>
-          </div>
-
-          {/* Trust line */}
-          <div data-reveal className="mt-10 flex items-center gap-4 text-[11px] font-medium uppercase tracking-[0.15em] text-white/20">
-            <span>AI-POWERED</span>
-            <span className="h-1 w-1 rounded-full bg-white/15" />
-            <span>REAL-TIME DATA</span>
-            <span className="h-1 w-1 rounded-full bg-white/15" />
-            <span>BUILT FOR AGENCIES</span>
-          </div>
+      {/* Content */}
+      <div className="relative z-10 flex min-h-[calc(100vh-40px)] flex-col px-6 sm:px-10 md:px-14 lg:px-20">
+        {/* ---- Micro nav ---- */}
+        <div className="py-6 sm:py-8">
+          <LandingNav />
         </div>
 
-        {/* Hero mockup */}
-        <div data-reveal className="relative mx-auto mt-24 max-w-4xl">
-          <HeroMockup />
-        </div>
-      </section>
+        {/* ============================================================
+            HERO — Asymmetric editorial composition
+            ============================================================ */}
+        <section className="relative flex flex-1 flex-col gap-10 lg:flex-row lg:items-start lg:gap-8">
+          {/* LEFT: Headline */}
+          <div className="flex flex-1 flex-col justify-center pt-8 lg:pt-0">
+            {/* Badge */}
+            <div className="hero-badge mb-8 inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/[0.04] px-3.5 py-1.5">
+              <Sparkles className="h-3 w-3 text-primary" />
+              <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-primary">
+                AI-Powered Client Acquisition
+              </span>
+            </div>
 
-      {/* ============================================================
-          STATS STRIP
-          ============================================================ */}
-      <section id="how-it-works" data-reveal className="relative px-4 py-16 sm:px-6">
-        <div className="mx-auto max-w-5xl">
-          <div className="glass-card-static rounded-2xl px-8 py-10">
-            <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-              {STATS.map((s) => (
-                <div key={s.label} className="text-center">
-                  <p className="text-[clamp(2rem,4vw,3.5rem)] font-bold tracking-[-0.03em] text-gradient-brand">{s.value}</p>
-                  <p className="mx-auto mt-2 max-w-[200px] text-[12px] leading-snug text-white/30">{s.label}</p>
-                </div>
-              ))}
+            {/* Headline — oversized, staggered */}
+            <h1 className="text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.92] tracking-[-0.04em] text-white">
+              <span className="hero-line block">FIND YOUR</span>
+              <span className="hero-line block">NEXT</span>
+              <span className="hero-line block text-gradient-brand">CLIENT.</span>
+            </h1>
+
+            {/* Supporting text */}
+            <div className="hero-meta mt-8 max-w-md">
+              <p className="text-[14px] leading-relaxed text-white/35">
+                Discover businesses with untapped digital potential, understand
+                their opportunity, and turn them into qualified clients.
+              </p>
+            </div>
+
+            {/* CTAs */}
+            <div className="hero-meta mt-8 flex flex-wrap items-center gap-4">
+              <Link
+                href="/register"
+                className="sheen group inline-flex items-center gap-2.5 rounded-lg bg-gradient-brand px-6 py-3 text-[13px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_-6px_hsl(var(--glow-strong)/0.5)]"
+              >
+                Start finding leads
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/login"
+                className="text-[12px] font-medium uppercase tracking-[0.1em] text-white/30 transition-colors hover:text-white/60"
+              >
+                Explore platform →
+              </Link>
+            </div>
+
+            {/* Micro labels */}
+            <div className="hero-meta mt-10 flex items-center gap-4 text-[9px] font-medium uppercase tracking-[0.15em] text-white/15">
+              <span>AI-POWERED</span>
+              <span className="h-px w-3 bg-white/10" />
+              <span>REAL-TIME DATA</span>
+              <span className="h-px w-3 bg-white/10" />
+              <span>BUILT FOR AGENCIES</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ============================================================
-          FEATURES — Bento Grid
-          ============================================================ */}
-      <section id="product" className="relative px-4 py-28 sm:px-6 sm:py-36">
-        <div className="mx-auto max-w-6xl">
-          <div data-reveal className="mx-auto max-w-xl text-center">
+          {/* RIGHT: Floating product panel */}
+          <div className="flex items-center justify-center lg:justify-end lg:pt-16">
+            <ProductPanel />
+          </div>
+        </section>
+
+        {/* ============================================================
+            STATS — Minimal horizontal strip
+            ============================================================ */}
+        <section data-reveal className="mt-20 border-t border-white/[0.04] py-12">
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
+            {STATS.map((s) => (
+              <div key={s.label}>
+                <p className="text-[clamp(2rem,4vw,3rem)] font-bold tracking-[-0.03em] text-gradient-brand">{s.value}</p>
+                <p className="mt-1 text-[11px] text-white/25">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ============================================================
+            FEATURES — Bento grid
+            ============================================================ */}
+        <section id="product" className="mt-16 border-t border-white/[0.04] py-16">
+          <div data-reveal className="mb-12">
             <span className="label-caps text-primary">How it works</span>
-            <h2 className="mt-5 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-balance">
+            <h2 className="mt-4 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-white">
               Every step from discovery to close
             </h2>
           </div>
 
-          <div className="bento-grid mt-16">
+          <div className="bento-grid">
             {FEATURES.map((f, i) => (
               <div
                 key={f.title}
                 data-reveal
-                className={`glass-card gradient-border group p-7 ${
-                  f.wide ? "bento-item-wide" : "bento-item-third"
+                className={`glass-card group p-6 ${
+                  i < 2 ? "bento-item-wide" : "bento-item"
                 }`}
-                style={{ transitionDelay: `${i * 60}ms` }}
+                style={{ transitionDelay: `${i * 50}ms` }}
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/[0.07] transition-all duration-400 group-hover:scale-110 group-hover:bg-primary/[0.12]">
-                  <f.icon className="h-5 w-5 text-primary" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.03] transition-all duration-300 group-hover:bg-primary/[0.06]">
+                  <f.icon className="h-4 w-4 text-white/40 group-hover:text-primary transition-colors" />
                 </div>
-                <h3 className="mt-5 text-[16px] font-bold text-white/90">{f.title}</h3>
-                <p className="mt-2.5 text-[13.5px] leading-relaxed text-white/35">{f.body}</p>
+                <h3 className="mt-4 text-[14px] font-bold text-white/85">{f.title}</h3>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-white/30">{f.body}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ============================================================
-          PRICING
-          ============================================================ */}
-      <section id="pricing" className="relative px-4 py-28 sm:px-6">
-        <div className="mx-auto max-w-6xl">
-          <div data-reveal className="mx-auto max-w-xl text-center">
+        {/* ============================================================
+            PRICING
+            ============================================================ */}
+        <section id="pricing" className="mt-8 border-t border-white/[0.04] py-16">
+          <div data-reveal className="mb-12">
             <span className="label-caps text-primary">Pricing</span>
-            <h2 className="mt-5 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-balance">
+            <h2 className="mt-4 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-white">
               One new client pays for a year
             </h2>
-            <p className="mt-3 text-[14px] text-white/35">
-              Start free. No credit card required.
-            </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
                 name: "Free",
                 price: "$0",
-                desc: "Try the full workflow",
-                features: ["50 lead searches/mo", "10 AI analyses/mo", "1 seat", "CRM & scoring"],
+                features: ["50 lead searches/mo", "10 AI analyses/mo", "1 seat"],
                 cta: "Start for free",
               },
               {
                 name: "Starter",
                 price: "$29",
-                desc: "For freelancers",
-                features: ["500 lead searches/mo", "100 AI analyses/mo", "2 seats", "Email outreach"],
+                features: ["500 lead searches/mo", "100 AI analyses/mo", "2 seats"],
                 cta: "Start free trial",
               },
               {
                 name: "Pro",
                 price: "$79",
-                desc: "For steady outreach",
-                features: ["2,000 lead searches/mo", "500 AI analyses/mo", "5 seats", "Priority AI"],
+                features: ["2,000 lead searches/mo", "500 AI analyses/mo", "5 seats"],
                 cta: "Start free trial",
                 highlight: true,
               },
               {
                 name: "Agency",
                 price: "$199",
-                desc: "For teams",
-                features: ["10,000 lead searches/mo", "2,500 AI analyses/mo", "15 seats", "Onboarding"],
+                features: ["10,000 lead searches/mo", "2,500 AI analyses/mo", "15 seats"],
                 cta: "Start free trial",
               },
             ].map((plan, i) => (
               <div
                 key={plan.name}
                 data-reveal
-                className={`glass-card relative flex flex-col p-6 ${
-                  plan.highlight ? "glow-ring border-primary/20" : ""
+                className={`glass-card relative flex flex-col p-5 ${
+                  plan.highlight ? "border-primary/15" : ""
                 }`}
-                style={{ transitionDelay: `${i * 80}ms` }}
+                style={{ transitionDelay: `${i * 60}ms` }}
               >
                 {plan.highlight && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-brand px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-ink">
-                    Most popular
+                  <span className="absolute -top-2.5 left-4 rounded-full bg-gradient-brand px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-ink">
+                    Popular
                   </span>
                 )}
-                <h3 className="text-sm font-bold text-white/90">{plan.name}</h3>
-                <p className="mt-1 text-[11px] text-white/30">{plan.desc}</p>
-                <p className="mt-5 text-3xl font-bold text-white">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/30">{plan.name}</p>
+                <p className="mt-3 text-2xl font-bold text-white">
                   {plan.price}
-                  <span className="text-xs font-normal text-white/25">/mo</span>
+                  <span className="text-[10px] font-normal text-white/20">/mo</span>
                 </p>
-                <ul className="mt-6 flex flex-col gap-3">
+                <ul className="mt-4 flex flex-col gap-2">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-[12px] text-white/50">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      {f}
-                    </li>
+                    <li key={f} className="text-[11px] text-white/35">· {f}</li>
                   ))}
                 </ul>
                 <Link
                   href="/register"
-                  className={`mt-auto block rounded-xl px-4 py-3 text-center text-[13px] font-bold transition-all duration-300 ${
+                  className={`mt-auto block rounded-lg px-4 py-2.5 text-center text-[11px] font-bold uppercase tracking-[0.08em] transition-all duration-300 ${
                     plan.highlight
                       ? "bg-gradient-brand text-brand-ink glow-btn hover:scale-[1.02]"
-                      : "glass border border-white/8 text-white/75 hover:border-white/15 hover:text-white"
+                      : "border border-white/[0.06] text-white/50 hover:border-white/10 hover:text-white/70"
                   }`}
                 >
                   {plan.cta}
@@ -349,53 +270,54 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </section>
 
-          <p data-reveal className="mt-10 text-center text-[11px] text-white/20">
-            No credit card required for Free · Cancel anytime · 14-day free trial on all paid plans
-          </p>
-        </div>
-      </section>
-
-      {/* ============================================================
-          CTA
-          ============================================================ */}
-      <section className="relative px-4 py-32 sm:px-6">
-        <div data-reveal className="glass-card glow-ring relative mx-auto max-w-4xl overflow-hidden px-10 py-20 text-center">
-          <div
-            className="pointer-events-none absolute inset-0 opacity-25"
-            style={{ background: "radial-gradient(circle at 50% 50%, hsl(var(--glow-strong) / 0.25), transparent 65%)" }}
-          />
-          <div className="relative">
-            <h2 className="text-[clamp(1.8rem,3.5vw,2.5rem)] font-bold tracking-[-0.02em] text-balance">
-              Your next client is one search away.
-            </h2>
-            <p className="mx-auto mt-4 max-w-md text-[14px] text-white/35">
-              Open the workspace, run a search, and see scored leads in seconds.
-            </p>
-            <Link
-              href="/register"
-              className="sheen group mt-10 inline-flex items-center gap-3 rounded-2xl bg-gradient-brand px-8 py-4 text-[15px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_40px_-8px_hsl(var(--glow-strong)/0.7)]"
-            >
-              Open LeadForge
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
+        {/* ============================================================
+            CTA
+            ============================================================ */}
+        <section data-reveal className="mt-8 border-t border-white/[0.04] py-20">
+          <div className="glass-card-static glow-ring relative overflow-hidden px-8 py-16 text-center">
+            <div
+              className="pointer-events-none absolute inset-0 opacity-15"
+              style={{ background: "radial-gradient(circle at 50% 50%, hsl(var(--glow-strong) / 0.2), transparent 60%)" }}
+            />
+            <div className="relative">
+              <h2 className="text-[clamp(1.5rem,3vw,2.25rem)] font-bold tracking-[-0.02em] text-white">
+                Your next client is one search away.
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-[13px] text-white/30">
+                Open the workspace, run a search, and see scored leads in seconds.
+              </p>
+              <Link
+                href="/register"
+                className="sheen group mt-8 inline-flex items-center gap-2.5 rounded-lg bg-gradient-brand px-6 py-3 text-[13px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_-6px_hsl(var(--glow-strong)/0.5)]"
+              >
+                Open LeadForge
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ============================================================
-          FOOTER
-          ============================================================ */}
-      <footer className="relative border-t border-white/[0.04] px-4 py-10 sm:px-6">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-[11px] text-white/20 sm:flex-row">
-          <span>© {new Date().getFullYear()} LeadForge INC. Built for web designers and agencies.</span>
-          <div className="flex gap-6">
-            <Link href="/login" className="transition-colors hover:text-white/50">Dashboard</Link>
-            <a href="#product" className="transition-colors hover:text-white/50">Product</a>
-            <a href="#pricing" className="transition-colors hover:text-white/50">Pricing</a>
+        {/* ============================================================
+            FOOTER
+            ============================================================ */}
+        <footer className="border-t border-white/[0.04] py-8">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-4">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/25">
+                LeadForge INC
+              </span>
+              <span className="text-[9px] text-white/10">© {new Date().getFullYear()}</span>
+            </div>
+            <div className="flex gap-5 text-[10px] text-white/20">
+              <Link href="/login" className="transition-colors hover:text-white/40">Dashboard</Link>
+              <a href="#product" className="transition-colors hover:text-white/40">Product</a>
+              <a href="#pricing" className="transition-colors hover:text-white/40">Pricing</a>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }
