@@ -37,14 +37,14 @@ export function Topbar({ onOpenNav }: { onOpenNav?: () => void }) {
         setMenuOpen(false);
       }
     }
-    function onEscape(event: KeyboardEvent) {
+    function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setMenuOpen(false);
     }
-    document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onEscape);
+    document.addEventListener("click", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onEscape);
+      document.removeEventListener("click", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, []);
 
