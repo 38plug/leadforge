@@ -265,8 +265,7 @@ export function EmailSettings() {
             )}
           </div>
 
-          {data?.configured && (
-            <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
               <p className="text-xs font-medium">Send a test message</p>
               <div className="flex flex-wrap gap-2">
                 <Input
@@ -284,7 +283,6 @@ export function EmailSettings() {
                 Campaigns will not send until a test message has been delivered successfully.
               </p>
             </div>
-          )}
         </CardContent>
       </Card>
 
