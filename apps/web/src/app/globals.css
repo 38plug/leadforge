@@ -1193,23 +1193,26 @@ input:focus-visible,
 }
 
 /* ======================================================================
-   Metric Box — green glow on hover
+   Metric Box + Opportunity Brief — green glow on hover
    ====================================================================== */
-.metric-box {
+.metric-box,
+.brief-card {
   display: block;
   border-radius: 8px;
   border: 1px solid hsl(0 0% 100% / 0.05);
   background: hsl(0 0% 100% / 0.02);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
 }
-.metric-box:hover {
-  border-color: hsl(82 100% 61% / 0.25);
-  background: hsl(82 100% 61% / 0.03);
+.metric-box:hover,
+.brief-card:hover {
+  border-color: hsl(82 100% 61% / 0.4);
+  background: hsl(82 100% 61% / 0.05);
   box-shadow:
-    0 0 16px -4px hsl(82 100% 61% / 0.15),
-    0 0 40px -8px hsl(82 100% 61% / 0.08);
+    0 0 20px -2px hsl(82 100% 61% / 0.25),
+    0 0 60px -8px hsl(82 100% 61% / 0.15),
+    inset 0 0 30px -10px hsl(82 100% 61% / 0.06);
 }
 .metric-box--highlight {
-  border-color: hsl(82 100% 61% / 0.12);
-  background: hsl(82 100% 61% / 0.04);
+  border-color: hsl(82 100% 61% / 0.15);
+  background: hsl(82 100% 61% / 0.05);
 }

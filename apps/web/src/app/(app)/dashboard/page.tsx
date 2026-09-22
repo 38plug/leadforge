@@ -173,7 +173,7 @@ export default function OverviewPage() {
             {noWebsite.length > 0 && (
               <Link
                 href="/leads"
-                className="flex items-center gap-3 rounded-md border border-white/[0.04] bg-white/[0.015] p-3 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.03]"
+                className="brief-card flex items-center gap-3 p-3"
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-primary/15 bg-primary/[0.06]">
                   <Globe2 className="h-3.5 w-3.5 text-primary" />
@@ -189,7 +189,7 @@ export default function OverviewPage() {
             {highOpportunity.length > 0 && (
               <Link
                 href="/crm"
-                className="flex items-center gap-3 rounded-md border border-white/[0.04] bg-white/[0.015] p-3 transition-all duration-200 hover:border-white/[0.08] hover:bg-white/[0.03]"
+                className="brief-card flex items-center gap-3 p-3"
               >
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-white/[0.06] bg-white/[0.03]">
                   <Flame className="h-3.5 w-3.5 text-amber-400/70" />
