@@ -36,7 +36,7 @@ export function Sidebar({
   const { workspace, user } = useAuth();
   const [usage, setUsage] = useState<ApiUsage | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [flyoutY, setFlyoutY] = useState(0);
 
   useEffect(() => {
@@ -88,7 +88,6 @@ export function Sidebar({
           {allItems.map((item) => {
             const active = isActivePath(pathname ?? "", item.href);
             const Icon = item.icon;
-            const group = allGroups.find((g) => g.items.some((i) => i.href === item.href));
             return (
               <div
                 key={item.href}
@@ -97,11 +96,11 @@ export function Sidebar({
                   const rect = e.currentTarget.getBoundingClientRect();
                   const railRect = e.currentTarget.closest(".instrument-rail")?.getBoundingClientRect();
                   if (railRect) {
-                    setFlyoutY(rect.top - railRect.top);
+                    setFlyoutY(rect.top - railRect.top + rect.height / 2 - 18);
                   }
-                  setHoveredGroup(group?.label ?? null);
+                  setHoveredItem(item.label);
                 }}
-                onMouseLeave={() => setHoveredGroup(null)}
+                onMouseLeave={() => setHoveredItem(null)}
               >
                 <Link
                   href={item.href}
@@ -144,34 +143,15 @@ export function Sidebar({
           </button>
         </nav>
 
-        {/* Flyout panel — slides out on hover */}
-        {hoveredGroup && (
+        {/* Flyout panel — single item slide-out */}
+        {hoveredItem && (
           <div
             className="instrument-flyout"
             style={{ top: flyoutY }}
           >
-            <div className="instrument-flyout-header">
-              {hoveredGroup}
+            <div className="instrument-flyout-item">
+              {hoveredItem}
             </div>
-            {allGroups
-              .filter((g) => g.label === hoveredGroup)
-              .map((group) =>
-                group.items.map((item) => {
-                  const active = isActivePath(pathname ?? "", item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={onNavigate}
-                      className={cn("instrument-flyout-item", active && "active")}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })
-              )}
           </div>
         )}
       </div>

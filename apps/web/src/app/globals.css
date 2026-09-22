@@ -872,27 +872,6 @@ input:focus-visible,
   background: hsl(82 100% 61%);
   box-shadow: 0 0 8px hsl(82 100% 61% / 0.5);
 }
-.instrument-rail-tooltip {
-  position: absolute;
-  left: calc(100% + 8px);
-  top: 50%;
-  transform: translateY(-50%);
-  white-space: nowrap;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: hsl(0 0% 8%);
-  border: 1px solid hsl(0 0% 100% / 0.08);
-  font-size: 11px;
-  font-weight: 500;
-  color: hsl(0 0% 100% / 0.7);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 50;
-}
-.instrument-rail-item:hover .instrument-rail-tooltip {
-  opacity: 1;
-}
 
 /* Expanded sidebar rail (when needed) */
 .sidebar-expanded {
@@ -1184,67 +1163,31 @@ input:focus-visible,
 }
 
 /* ======================================================================
-   Flyout Panel — slides out from instrument rail on hover
+   Flyout Panel — single item label, slides out from instrument rail
    ====================================================================== */
 .instrument-flyout {
   position: absolute;
   left: 56px;
-  top: 0;
-  width: 200px;
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  scrollbar-width: none;
+  width: max-content;
+  max-width: 200px;
   background: hsl(0 0% 5% / 0.97);
-  border: 1px solid hsl(0 0% 100% / 0.08);
-  border-radius: 8px;
-  box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid hsl(0 0% 100% / 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   z-index: 100;
-  animation: flyout-enter 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  padding: 4px;
-}
-.instrument-flyout::-webkit-scrollbar { display: none; }
-.instrument-flyout-header {
-  padding: 6px 10px 4px;
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: hsl(0 0% 100% / 0.2);
+  animation: flyout-slide-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  padding: 6px 12px;
 }
 .instrument-flyout-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: hsl(0 0% 100% / 0.4);
-  text-decoration: none;
-  transition: all 0.12s ease;
-}
-.instrument-flyout-item:hover {
   color: hsl(0 0% 100% / 0.7);
-  background: hsl(0 0% 100% / 0.04);
+  white-space: nowrap;
+  line-height: 1.4;
 }
-.instrument-flyout-item.active {
-  color: hsl(0 0% 96%);
-  background: hsl(82 100% 61% / 0.08);
-}
-.instrument-flyout-item.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  border-radius: 1px;
-  background: hsl(82 100% 61%);
-  box-shadow: 0 0 8px hsl(82 100% 61% / 0.5);
-}
-@keyframes flyout-enter {
-  0% { opacity: 0; transform: translateX(-4px); }
+@keyframes flyout-slide-in {
+  0% { opacity: 0; transform: translateX(-6px); }
   100% { opacity: 1; transform: translateX(0); }
 }
