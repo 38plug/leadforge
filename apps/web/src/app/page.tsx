@@ -1,60 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import {
-  ArrowRight,
-  Search,
-  Sparkles,
-  Target,
-  KanbanSquare,
-  Globe,
-  Shield,
-} from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { LandingNav } from "@/components/marketing/landing-nav";
 import { RibbonArtwork } from "@/components/marketing/ribbon-artwork";
 import { ProductPanel } from "@/components/marketing/product-panel";
-
-const FEATURES = [
-  {
-    icon: Search,
-    title: "Discover",
-    body: "Filter by country, city, and niche to surface local businesses that match your ideal client profile.",
-  },
-  {
-    icon: Globe,
-    title: "Detect",
-    body: "Every lead is checked for a live, working website — outdated sites are flagged automatically.",
-  },
-  {
-    icon: Target,
-    title: "Score",
-    body: "A transparent 0–100 score backed by rating, reviews, and social presence.",
-  },
-  {
-    icon: Sparkles,
-    title: "Outreach",
-    body: "Turn a lead into a personalized email, call script, or DM in one click.",
-  },
-  {
-    icon: KanbanSquare,
-    title: "Pipeline",
-    body: "Move leads from New to Won across a 9-stage Kanban board.",
-  },
-  {
-    icon: Shield,
-    title: "Comply",
-    body: "Suppression lists, unsubscribe handling, and sending limits built in.",
-  },
-];
-
-const STATS = [
-  { value: "2,481", label: "Businesses analyzed / workspace / month" },
-  { value: "94", label: "Avg. opportunity score" },
-  { value: "3.2×", label: "More replies vs. generic outreach" },
-];
+import { FloatingAnnotation } from "@/components/marketing/annotation";
+import { DiscoverySection } from "@/components/marketing/section-discovery";
+import { OpportunitySection } from "@/components/marketing/section-opportunity";
+import { AnalysisSection } from "@/components/marketing/section-analysis";
+import { OutreachSection } from "@/components/marketing/section-outreach";
+import { CRMSection } from "@/components/marketing/section-crm";
+import { WorkflowSection } from "@/components/marketing/section-workflow";
 
 export default function LandingPage() {
+  /* Scroll reveal observer */
   useEffect(() => {
     const els = document.querySelectorAll<HTMLElement>("[data-reveal]");
     if (!els.length) return;
@@ -67,24 +28,45 @@ export default function LandingPage() {
           }
         });
       },
-      { threshold: 0.08, rootMargin: "0px 0px -40px 0px" }
+      { threshold: 0.06, rootMargin: "0px 0px -30px 0px" }
     );
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
 
+  /* Parallax on mousemove (desktop only) */
+  const rafRef = useRef<number>(0);
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const x = (e.clientX / window.innerWidth - 0.5) * 2;
+      const y = (e.clientY / window.innerHeight - 0.5) * 2;
+      document.documentElement.style.setProperty("--px", `${x}`);
+      document.documentElement.style.setProperty("--py", `${y}`);
+    });
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: hover) and (pointer: fine)");
+    if (!mq.matches) return;
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, [handleMouseMove]);
+
   return (
-    <div className="page-frame relative bg-[#020202]">
-      {/* Grid texture */}
-      <div className="pointer-events-none absolute inset-0 dot-grid opacity-30" />
+    <div className="page-frame grain-overlay vignette relative bg-[#050505]">
+      {/* Dot grid texture */}
+      <div className="pointer-events-none absolute inset-0 z-0 dot-grid opacity-25" />
 
-      {/* Abstract ribbon artwork */}
-      <RibbonArtwork />
+      {/* Abstract ribbon artwork — depth layer 1 (background) */}
+      <div className="parallax-bg" style={{ transform: "translate(calc(var(--px, 0) * -3px), calc(var(--py, 0) * -3px))" }}>
+        <RibbonArtwork />
+      </div>
 
-      {/* Content */}
-      <div className="relative z-10 flex min-h-[calc(100vh-40px)] flex-col px-6 sm:px-10 md:px-14 lg:px-20">
+      {/* Content — depth layer 3 (foreground, moves fastest) */}
+      <div className="parallax-fg relative z-10 flex min-h-[calc(100vh-40px)] flex-col px-6 sm:px-10 md:px-14 lg:px-20">
         {/* ---- Micro nav ---- */}
-        <div className="py-6 sm:py-8">
+        <div className="cinematic-nav py-6 sm:py-8">
           <LandingNav />
         </div>
 
@@ -95,7 +77,7 @@ export default function LandingPage() {
           {/* LEFT: Headline */}
           <div className="flex flex-1 flex-col justify-center pt-8 lg:pt-0">
             {/* Badge */}
-            <div className="hero-badge mb-8 inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/[0.04] px-3.5 py-1.5">
+            <div className="cinematic-label mb-8 inline-flex w-fit items-center gap-2 rounded-full border border-primary/15 bg-primary/[0.04] px-3.5 py-1.5">
               <Sparkles className="h-3 w-3 text-primary" />
               <span className="text-[9px] font-semibold uppercase tracking-[0.15em] text-primary">
                 AI-Powered Client Acquisition
@@ -124,17 +106,18 @@ export default function LandingPage() {
                 className="sheen group inline-flex items-center gap-2.5 rounded-lg bg-gradient-brand px-6 py-3 text-[13px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_-6px_hsl(var(--glow-strong)/0.5)]"
               >
                 Start finding leads
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/login"
-                className="text-[12px] font-medium uppercase tracking-[0.1em] text-white/30 transition-colors hover:text-white/60"
+                className="group text-[12px] font-medium uppercase tracking-[0.1em] text-white/30 transition-colors hover:text-white/60"
               >
-                Explore platform →
+                Explore platform
+                <span className="ml-1 inline-block transition-transform group-hover:translate-x-0.5">→</span>
               </Link>
             </div>
 
-            {/* Micro labels */}
+            {/* Micro metadata labels */}
             <div className="hero-meta mt-10 flex items-center gap-4 text-[9px] font-medium uppercase tracking-[0.15em] text-white/15">
               <span>AI-POWERED</span>
               <span className="h-px w-3 bg-white/10" />
@@ -150,12 +133,22 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ---- Floating technical annotations (hero) ---- */}
+        <FloatingAnnotation label="AI_SCAN_01" value="ACTIVE" top="15%" right="-2%" delay={1.5} />
+        <FloatingAnnotation label="LEAD_DETECTED" value="94" top="35%" left="-3%" delay={1.8} />
+        <FloatingAnnotation label="OPPORTUNITY_ENGINE" bottom="25%" right="5%" delay={2} />
+        <FloatingAnnotation label="MARKET_DATA" value="2,481" bottom="40%" left="2%" delay={2.2} dotColor="hsl(28 85% 55% / 0.3)" />
+
         {/* ============================================================
             STATS — Minimal horizontal strip
             ============================================================ */}
         <section data-reveal className="mt-20 border-t border-white/[0.04] py-12">
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-3">
-            {STATS.map((s) => (
+            {[
+              { value: "2,481", label: "Businesses analyzed / workspace / month" },
+              { value: "94", label: "Avg. opportunity score" },
+              { value: "3.2×", label: "More replies vs. generic outreach" },
+            ].map((s) => (
               <div key={s.label}>
                 <p className="text-[clamp(2rem,4vw,3rem)] font-bold tracking-[-0.03em] text-gradient-brand">{s.value}</p>
                 <p className="mt-1 text-[11px] text-white/25">{s.label}</p>
@@ -165,43 +158,42 @@ export default function LandingPage() {
         </section>
 
         {/* ============================================================
-            FEATURES — Bento grid
+            SECTION 2 — Market Discovery
             ============================================================ */}
-        <section id="product" className="mt-16 border-t border-white/[0.04] py-16">
-          <div data-reveal className="mb-12">
-            <span className="label-caps text-primary">How it works</span>
-            <h2 className="mt-4 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-white">
-              Every step from discovery to close
-            </h2>
-          </div>
-
-          <div className="bento-grid">
-            {FEATURES.map((f, i) => (
-              <div
-                key={f.title}
-                data-reveal
-                className={`glass-card group p-6 ${
-                  i < 2 ? "bento-item-wide" : "bento-item"
-                }`}
-                style={{ transitionDelay: `${i * 50}ms` }}
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.03] transition-all duration-300 group-hover:bg-primary/[0.06]">
-                  <f.icon className="h-4 w-4 text-white/40 group-hover:text-primary transition-colors" />
-                </div>
-                <h3 className="mt-4 text-[14px] font-bold text-white/85">{f.title}</h3>
-                <p className="mt-2 text-[12.5px] leading-relaxed text-white/30">{f.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
+        <DiscoverySection />
 
         {/* ============================================================
-            PRICING
+            SECTION 3 — Opportunity
             ============================================================ */}
-        <section id="pricing" className="mt-8 border-t border-white/[0.04] py-16">
-          <div data-reveal className="mb-12">
+        <OpportunitySection />
+
+        {/* ============================================================
+            SECTION 4 — AI Analysis
+            ============================================================ */}
+        <AnalysisSection />
+
+        {/* ============================================================
+            SECTION 5 — AI Outreach
+            ============================================================ */}
+        <OutreachSection />
+
+        {/* ============================================================
+            SECTION 6 — CRM Pipeline
+            ============================================================ */}
+        <CRMSection />
+
+        {/* ============================================================
+            AUTONOMOUS WORKFLOW
+            ============================================================ */}
+        <WorkflowSection />
+
+        {/* ============================================================
+            PRICING — Editorial style
+            ============================================================ */}
+        <section id="pricing" className="mt-8 border-t border-white/[0.04] py-20">
+          <div data-reveal className="mb-14">
             <span className="label-caps text-primary">Pricing</span>
-            <h2 className="mt-4 text-[clamp(1.8rem,3.5vw,2.75rem)] font-bold tracking-[-0.02em] text-white">
+            <h2 className="mt-5 text-[clamp(2rem,4vw,3.5rem)] font-bold tracking-[-0.02em] text-white">
               One new client pays for a year
             </h2>
           </div>
@@ -273,34 +265,48 @@ export default function LandingPage() {
         </section>
 
         {/* ============================================================
-            CTA
+            FINAL CTA — Minimal with artwork
             ============================================================ */}
-        <section data-reveal className="mt-8 border-t border-white/[0.04] py-20">
-          <div className="glass-card-static glow-ring relative overflow-hidden px-8 py-16 text-center">
-            <div
-              className="pointer-events-none absolute inset-0 opacity-15"
-              style={{ background: "radial-gradient(circle at 50% 50%, hsl(var(--glow-strong) / 0.2), transparent 60%)" }}
-            />
-            <div className="relative">
-              <h2 className="text-[clamp(1.5rem,3vw,2.25rem)] font-bold tracking-[-0.02em] text-white">
-                Your next client is one search away.
+        <section data-reveal className="mt-8 border-t border-white/[0.04] py-24">
+          <div className="relative overflow-hidden px-8 py-20">
+            {/* Abstract artwork behind CTA */}
+            <div className="pointer-events-none absolute inset-0">
+              <div
+                className="animate-ribbon-drift absolute -right-20 -top-20 h-80 w-80 rounded-full opacity-10"
+                style={{
+                  background: "radial-gradient(circle, hsl(82 100% 61% / 0.15), transparent 70%)",
+                }}
+              />
+              <div
+                className="animate-ribbon-drift-alt absolute -bottom-16 -left-16 h-64 w-64 rounded-full opacity-8"
+                style={{
+                  background: "radial-gradient(circle, hsl(28 85% 55% / 0.1), transparent 70%)",
+                }}
+              />
+            </div>
+
+            <div className="relative text-center">
+              <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-bold leading-[0.95] tracking-[-0.03em] text-white">
+                YOUR NEXT<br />CLIENT<br />
+                <span className="text-gradient-brand">IS OUT THERE.</span>
               </h2>
-              <p className="mx-auto mt-3 max-w-md text-[13px] text-white/30">
-                Open the workspace, run a search, and see scored leads in seconds.
+              <p className="mx-auto mt-6 max-w-md text-[13px] leading-relaxed text-white/30">
+                Search the market. Find the opportunity. Let LeadForge do
+                the intelligence.
               </p>
               <Link
                 href="/register"
-                className="sheen group mt-8 inline-flex items-center gap-2.5 rounded-lg bg-gradient-brand px-6 py-3 text-[13px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_-6px_hsl(var(--glow-strong)/0.5)]"
+                className="sheen group mt-10 inline-flex items-center gap-2.5 rounded-lg bg-gradient-brand px-8 py-3.5 text-[13px] font-bold text-brand-ink transition-all duration-300 hover:scale-[1.03] hover:shadow-[0_0_30px_-6px_hsl(var(--glow-strong)/0.5)]"
               >
-                Open LeadForge
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                Start finding leads
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
           </div>
         </section>
 
         {/* ============================================================
-            FOOTER
+            FOOTER — Minimal
             ============================================================ */}
         <footer className="border-t border-white/[0.04] py-8">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -310,10 +316,16 @@ export default function LandingPage() {
               </span>
               <span className="text-[9px] text-white/10">© {new Date().getFullYear()}</span>
             </div>
-            <div className="flex gap-5 text-[10px] text-white/20">
-              <Link href="/login" className="transition-colors hover:text-white/40">Dashboard</Link>
-              <a href="#product" className="transition-colors hover:text-white/40">Product</a>
-              <a href="#pricing" className="transition-colors hover:text-white/40">Pricing</a>
+            <div className="flex items-center gap-6">
+              <div className="flex gap-5 text-[10px] text-white/20">
+                <Link href="/login" className="transition-colors hover:text-white/40">Dashboard</Link>
+                <a href="#product" className="transition-colors hover:text-white/40">Product</a>
+                <a href="#pricing" className="transition-colors hover:text-white/40">Pricing</a>
+              </div>
+              <div className="flex items-center gap-1.5 text-[8px] uppercase tracking-[0.12em] text-white/15">
+                <span className="h-1 w-1 rounded-full bg-primary" style={{ animation: "status-pulse 2s ease-in-out infinite" }} />
+                System operational
+              </div>
             </div>
           </div>
         </footer>
