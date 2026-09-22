@@ -311,6 +311,7 @@ def test_email_settings(
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
 
-    row.verified_at = datetime.now(timezone.utc).isoformat()
-    db.commit()
+    if row is not None:
+        row.verified_at = datetime.now(timezone.utc).isoformat()
+        db.commit()
     return {"ok": True, "message": f"Sent. Check the inbox for {payload.to}."}
