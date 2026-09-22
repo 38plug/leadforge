@@ -1191,3 +1191,25 @@ input:focus-visible,
   0% { opacity: 0; transform: translateX(-6px); }
   100% { opacity: 1; transform: translateX(0); }
 }
+
+/* ======================================================================
+   Metric Box — green glow on hover
+   ====================================================================== */
+.metric-box {
+  display: block;
+  border-radius: 8px;
+  border: 1px solid hsl(0 0% 100% / 0.05);
+  background: hsl(0 0% 100% / 0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.metric-box:hover {
+  border-color: hsl(82 100% 61% / 0.25);
+  background: hsl(82 100% 61% / 0.03);
+  box-shadow:
+    0 0 16px -4px hsl(82 100% 61% / 0.15),
+    0 0 40px -8px hsl(82 100% 61% / 0.08);
+}
+.metric-box--highlight {
+  border-color: hsl(82 100% 61% / 0.12);
+  background: hsl(82 100% 61% / 0.04);
+}

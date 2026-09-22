@@ -148,19 +148,19 @@ export default function OverviewPage() {
 
       {/* ---- Metrics ---- */}
       <div className="dash-enter dash-enter-delay-2 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Link href="/leads" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+        <Link href="/leads" className="metric-box">
           <MetricInstrument value={leads.length} label="TOTAL LEADS" />
         </Link>
-        <Link href="/leads" className="block rounded-lg border border-primary/15 bg-primary/[0.03] transition-colors hover:border-primary/25">
+        <Link href="/leads" className="metric-box metric-box--highlight">
           <MetricInstrument value={highOpportunity.length} label="HIGH OPPORTUNITY" />
         </Link>
-        <Link href="/leads" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+        <Link href="/leads" className="metric-box">
           <MetricInstrument value={noWebsite.length} label="NEEDS WEBSITE" />
         </Link>
-        <Link href="/crm" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+        <Link href="/crm" className="metric-box">
           <MetricInstrument value={outreachActive.length} label="OUTREACH ACTIVE" />
         </Link>
-        <Link href="/crm" className="block rounded-lg border border-white/[0.05] bg-white/[0.02] transition-colors hover:border-white/[0.09]">
+        <Link href="/crm" className="metric-box">
           <MetricInstrument value={won.length} label="WON" />
         </Link>
       </div>
